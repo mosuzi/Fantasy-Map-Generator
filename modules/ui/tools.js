@@ -22,6 +22,7 @@ toolsContent.addEventListener("click", function (event) {
   else if (button === "editZonesButton") editZones();
   else if (button === "overviewChartsButton") overviewCharts();
   else if (button === "overviewBurgsButton") overviewBurgs();
+  else if (button === "overviewRoutesButton") overviewRoutes();
   else if (button === "overviewRiversButton") overviewRivers();
   else if (button === "overviewMilitaryButton") overviewMilitary();
   else if (button === "overviewMarkersButton") overviewMarkers();
@@ -66,7 +67,7 @@ toolsContent.addEventListener("click", function (event) {
   if (button === "addLabel") toggleAddLabel();
   else if (button === "addBurgTool") toggleAddBurg();
   else if (button === "addRiver") toggleAddRiver();
-  else if (button === "addRoute") toggleAddRoute();
+  else if (button === "addRoute") createRoute();
   else if (button === "addMarker") toggleAddMarker();
   // click to create a new map buttons
   else if (button === "openSubmapMenu") UISubmap.openSubmapMenu();
@@ -76,10 +77,10 @@ toolsContent.addEventListener("click", function (event) {
 function processFeatureRegeneration(event, button) {
   if (button === "regenerateStateLabels") drawStateLabels();
   else if (button === "regenerateReliefIcons") {
-    ReliefIcons();
+    ReliefIcons.draw();
     if (!layerIsOn("toggleRelief")) toggleRelief();
   } else if (button === "regenerateRoutes") {
-    Routes.regenerate();
+    regenerateRoutes();
     if (!layerIsOn("toggleRoutes")) toggleRoutes();
   } else if (button === "regenerateRivers") regenerateRivers();
   else if (button === "regeneratePopulation") recalculatePopulation();
@@ -115,6 +116,14 @@ async function openEmblemEditor() {
   editEmblem(type, id, el);
 }
 
+function regenerateRoutes() {
+  const locked = pack.routes.filter(route => route.lock).map((route, index) => ({...route, i: index}));
+  Routes.generate(locked);
+
+  routes.selectAll("path").remove();
+  if (layerIsOn("toggleRoutes")) drawRoutes();
+}
+
 function regenerateRivers() {
   Rivers.generate();
   Lakes.defineGroup();
@@ -129,7 +138,7 @@ function recalculatePopulation() {
     if (!b.i || b.removed || b.lock) return;
     const i = b.cell;
 
-    b.population = rn(Math.max((pack.cells.s[i] + pack.cells.road[i] / 2) / 8 + b.i / 1000 + (i % 100) / 1000, 0.1), 3);
+    b.population = rn(Math.max(pack.cells.s[i] / 8 + b.i / 1000 + (i % 100) / 1000, 0.1), 3);
     if (b.capital) b.population = b.population * 1.3; // increase capital population
     if (b.port) b.population = b.population * 1.3; // increase port population
     b.population = rn(b.population * gauss(2, 3, 0.6, 20, 3), 3);
@@ -167,7 +176,7 @@ function recreateStates() {
   const localSeed = generateSeed();
   Math.random = aleaPRNG(localSeed);
 
-  const statesCount = +regionsOutput.value;
+  const statesCount = +byId("").value;
   if (!statesCount) {
     tip(`<i>States Number</i> option value is zero. No counties are generated`, false, "error");
     return null;
@@ -189,7 +198,7 @@ function recreateStates() {
   const lockedStatesIds = lockedStates.map(s => s.i);
   const lockedStatesCapitals = lockedStates.map(s => s.capital);
 
-  if (lockedStates.length === validStates.length) {
+  if (validStates.length && lockedStates.length === validStates.length) {
     tip("Unable to regenerate as all states are locked", false, "error");
     return null;
   }
@@ -308,7 +317,7 @@ function recreateStates() {
       : pack.cultures[culture].type === "Nomadic"
       ? "Generic"
       : pack.cultures[culture].type;
-    const expansionism = rn(Math.random() * powerInput.value + 1, 1);
+    const expansionism = rn(Math.random() * byId("sizeVariety").value + 1, 1);
 
     const cultureType = pack.cultures[culture].type;
     const coa = COA.generate(capital.coa, 0.3, null, cultureType);
@@ -429,7 +438,7 @@ function regenerateBurgs() {
   BurgsAndStates.specifyBurgs();
   BurgsAndStates.defineBurgFeatures();
   BurgsAndStates.drawBurgs();
-  Routes.regenerate();
+  regenerateRoutes();
 
   // remove emblems
   document.querySelectorAll("[id^=burgCOA]").forEach(el => el.remove());
@@ -792,34 +801,6 @@ function addRiverOnClick() {
   }
 }
 
-function toggleAddRoute() {
-  const pressed = document.getElementById("addRoute").classList.contains("pressed");
-  if (pressed) {
-    unpressClickToAddButton();
-    return;
-  }
-
-  addFeature.querySelectorAll("button.pressed").forEach(b => b.classList.remove("pressed"));
-  addRoute.classList.add("pressed");
-  closeDialogs(".stable");
-  viewbox.style("cursor", "crosshair").on("click", addRouteOnClick);
-  tip("Click on map to add a first control point", true);
-  if (!layerIsOn("toggleRoutes")) toggleRoutes();
-}
-
-function addRouteOnClick() {
-  unpressClickToAddButton();
-  const point = d3.mouse(this);
-  const id = getNextId("route");
-  elSelected = routes
-    .select("g")
-    .append("path")
-    .attr("id", id)
-    .attr("data-new", 1)
-    .attr("d", `M${point[0]},${point[1]}`);
-  editRoute(true);
-}
-
 function toggleAddMarker() {
   const pressed = document.getElementById("addMarker")?.classList.contains("pressed");
   if (pressed) {
@@ -960,6 +941,6 @@ function viewCellDetails() {
 }
 
 async function overviewCharts() {
-  const Overview = await import("../dynamic/overview/charts-overview.js?v=1.89.24");
+  const Overview = await import("../dynamic/overview/charts-overview.js?v=1.99.00");
   Overview.open();
 }

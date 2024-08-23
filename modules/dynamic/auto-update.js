@@ -243,10 +243,12 @@ export function resolveVersionConflicts(version) {
     rivers.selectAll("path").each(function () {
       const i = +this.id.slice(5);
       const length = this.getTotalLength() / 2;
-      const s = this.getPointAtLength(length),
-        e = this.getPointAtLength(0);
-      const source = findCell(s.x, s.y),
-        mouth = findCell(e.x, e.y);
+      if (!length) return;
+
+      const s = this.getPointAtLength(length);
+      const e = this.getPointAtLength(0);
+      const source = findCell(s.x, s.y);
+      const mouth = findCell(e.x, e.y);
       const name = Rivers.getName(mouth);
       const type = length < 25 ? rw({Creek: 9, River: 3, Brook: 3, Stream: 1}) : "River";
       pack.rivers.push({i, parent: 0, length, source, mouth, basin: i, name, type});
@@ -856,6 +858,69 @@ export function resolveVersionConflicts(version) {
       compass.style("display", "none");
       compass.append("use").attr("xlink:href", "#defs-compass-rose");
       shiftCompass();
+    }
+  }
+
+  if (version < 1.99) {
+    // v1.99.00 changed routes generation algorithm and data format
+    routes.attr("display", null).attr("style", null);
+
+    delete cells.road;
+    delete cells.crossroad;
+
+    pack.routes = [];
+    const POINT_DISTANCE = grid.spacing * 0.75;
+
+    for (const g of document.querySelectorAll("#viewbox > #routes > g")) {
+      const group = g.id;
+      if (!group) continue;
+
+      for (const node of g.querySelectorAll("path")) {
+        const totalLength = node.getTotalLength();
+        if (!totalLength) {
+          ERROR && console.error("Route path has zero length", node);
+          continue;
+        }
+
+        const increment = totalLength / Math.ceil(totalLength / POINT_DISTANCE);
+        const points = [];
+
+        for (let i = 0; i <= totalLength + 0.1; i += increment) {
+          const point = node.getPointAtLength(i);
+          const x = rn(point.x, 2);
+          const y = rn(point.y, 2);
+          const cellId = findCell(x, y);
+          points.push([x, y, cellId]);
+        }
+
+        if (points.length < 2) {
+          ERROR && console.error("Route path has less than 2 points", node);
+          continue;
+        }
+
+        const secondCellId = points[1][2];
+        const feature = pack.cells.f[secondCellId];
+
+        pack.routes.push({i: pack.routes.length, group, feature, points});
+      }
+    }
+    routes.selectAll("path").remove();
+    if (layerIsOn("toggleRoutes")) drawRoutes();
+
+    const links = (pack.cells.routes = {});
+    for (const route of pack.routes) {
+      for (let i = 0; i < route.points.length - 1; i++) {
+        const cellId = route.points[i][2];
+        const nextCellId = route.points[i + 1][2];
+
+        if (cellId !== nextCellId) {
+          if (!links[cellId]) links[cellId] = {};
+          links[cellId][nextCellId] = route.i;
+
+          if (!links[nextCellId]) links[nextCellId] = {};
+          links[nextCellId][cellId] = route.i;
+        }
+      }
     }
   }
 }
