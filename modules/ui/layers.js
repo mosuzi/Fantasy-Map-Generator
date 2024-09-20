@@ -181,6 +181,7 @@ function restoreLayers() {
   if (layerIsOn("toggleIce")) drawIce();
   if (layerIsOn("toggleEmblems")) drawEmblems();
   if (layerIsOn("toggleMarkers")) drawMarkers();
+  if (layerIsOn("toggleZones")) drawZones();
 
   // some layers are rendered each time, remove them if they are not on
   if (!layerIsOn("toggleBorders")) borders.selectAll("path").remove();
@@ -1636,7 +1637,8 @@ function drawRoutes() {
   const routePaths = {};
 
   for (const route of pack.routes) {
-    const {i, group} = route;
+    const {i, group, points} = route;
+    if (!points || points.length < 2) continue;
     if (!routePaths[group]) routePaths[group] = [];
     routePaths[group].push(`<path id="route${i}" d="${Routes.getPath(route)}"/>`);
   }
@@ -1871,16 +1873,27 @@ function fitScaleBar(scaleBar, fullWidth, fullHeight) {
 function toggleZones(event) {
   if (!layerIsOn("toggleZones")) {
     turnButtonOn("toggleZones");
-    $("#zones").fadeIn();
+    drawZones();
     if (event && isCtrlClick(event)) editStyle("zones");
   } else {
-    if (event && isCtrlClick(event)) {
-      editStyle("zones");
-      return;
-    }
+    if (event && isCtrlClick(event)) return editStyle("zones");
     turnButtonOff("toggleZones");
-    $("#zones").fadeOut();
+    zones.selectAll("*").remove();
   }
+}
+
+function drawZones() {
+  const filterBy = byId("zonesFilterType").value;
+  const isFiltered = filterBy && filterBy !== "all";
+  const visibleZones = pack.zones.filter(
+    ({hidden, cells, type}) => !hidden && cells.length && (!isFiltered || type === filterBy)
+  );
+  zones.html(visibleZones.map(drawZone).join(""));
+}
+
+function drawZone({i, cells, type, color}) {
+  const path = getVertexPath(cells);
+  return `<path id="zone${i}" data-id="${i}" data-type="${type}" d="${path}" fill="${color}" />`;
 }
 
 function toggleEmblems(event) {
@@ -1907,21 +1920,21 @@ function drawEmblems() {
   const getStateEmblemsSize = () => {
     const startSize = minmax((graphHeight + graphWidth) / 40, 10, 100);
     const statesMod = 1 + validStates.length / 100 - (15 - validStates.length) / 200; // states number modifier
-    const sizeMod = +byId("emblemsStateSizeInput").value || 1;
+    const sizeMod = +emblems.select("#stateEmblems").attr("data-size") || 1;
     return rn((startSize / statesMod) * sizeMod); // target size ~50px on 1536x754 map with 15 states
   };
 
   const getProvinceEmblemsSize = () => {
     const startSize = minmax((graphHeight + graphWidth) / 100, 5, 70);
     const provincesMod = 1 + validProvinces.length / 1000 - (115 - validProvinces.length) / 1000; // states number modifier
-    const sizeMod = +byId("emblemsProvinceSizeInput").value || 1;
+    const sizeMod = +emblems.select("#provinceEmblems").attr("data-size") || 1;
     return rn((startSize / provincesMod) * sizeMod); // target size ~20px on 1536x754 map with 115 provinces
   };
 
   const getBurgEmblemSize = () => {
     const startSize = minmax((graphHeight + graphWidth) / 185, 2, 50);
     const burgsMod = 1 + validBurgs.length / 1000 - (450 - validBurgs.length) / 1000; // states number modifier
-    const sizeMod = +byId("emblemsBurgSizeInput").value || 1;
+    const sizeMod = +emblems.select("#burgEmblems").attr("data-size") || 1;
     return rn((startSize / burgsMod) * sizeMod); // target size ~8.5px on 1536x754 map with 450 burgs
   };
 

@@ -356,6 +356,14 @@ text.drag {
   font-weight: bold;
 }
 
+button.ui-button:disabled {
+  filter: brightness(0.95);
+}
+
+button.ui-button:disabled:hover {
+  cursor: default;
+}
+
 .ui-dialog,
 #optionsContainer {
   user-select: none;
@@ -548,6 +556,11 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 #options input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+#options input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 #options input[type="number"]:hover {
@@ -2376,6 +2389,15 @@ svg.button {
 }
 .separator:not(:empty)::after {
   margin-left: 0.25em;
+}
+
+@keyframes clockwiseBorderPulse {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @media print {

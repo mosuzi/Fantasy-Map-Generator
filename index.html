@@ -138,7 +138,7 @@
       }
     </style>
 
-    <link rel="preload" href="index.css?v=1.99.05" as="style" onload="this.onload=null; this.rel='stylesheet'" />
+    <link rel="preload" href="index.css?v=1.99.11" as="style" onload="this.onload=null; this.rel='stylesheet'" />
     <link rel="preload" href="icons.css" as="style" onload="this.onload=null; this.rel='stylesheet'" />
     <link rel="preload" href="libs/jquery-ui.css" as="style" onload="this.onload=null; this.rel='stylesheet'" />
   </head>
@@ -1082,6 +1082,13 @@
                     <option value="pointyHex">Hex grid (pointy)</option>
                     <option value="flatHex">Hex grid (flat)</option>
                     <option value="square">Square grid</option>
+                    <option value="square45deg">Square 45 degrees grid</option>
+                    <option value="squareTruncated">Truncated square grid</option>
+                    <option value="squareTetrakis">Tetrakis square grid</option>
+                    <option value="triangleHorizontal">Triangle grid (horizontal)</option>
+                    <option value="triangleVertical">Triangle grid (vertical)</option>
+                    <option value="trihexagonal">Trihexagonal grid</option>
+                    <option value="rhombille">Rhombille grid</option>
                   </select>
                 </td>
               </tr>
@@ -1094,6 +1101,9 @@
                     id="styleGridSizeFriendly"
                     data-tip="Distance between grid cell centers (in map scale)"
                   ></output>
+                  <a href="https://github.com/Azgaar/Fantasy-Map-Generator/wiki/Scale-and-distance#grids" target="_blank">
+                    <span data-tip="Open wiki article scale and distance to know about grid scale" class="icon-info-circled pointer"></span>
+                  </a>
                 </td>
               </tr>
 
@@ -1177,6 +1187,15 @@
                 <td>Stroke width</td>
                 <td>
                   <slider-input id="styleStrokeWidthInput" min="0" max="5" step=".01"></slider-input>
+                </td>
+              </tr>
+            </tbody>
+
+            <tbody id="styleLetterSpacing">
+              <tr data-tip="Set letter spacing">
+                <td>Letter spacing</td>
+                <td>
+                  <slider-input id="styleLetterSpacingInput" min="0" max="20" step=".01"></slider-input>
                 </td>
               </tr>
             </tbody>
@@ -1341,45 +1360,21 @@
               <tr data-tip="Set state emblems size multiplier">
                 <td>State size</td>
                 <td>
-                  <input
-                    id="emblemsStateSizeInput"
-                    data-stored="emblemsStateSize"
-                    type="number"
-                    min="0"
-                    max="5"
-                    step=".02"
-                    value="1"
-                  />
+                  <slider-input id="emblemsStateSizeInput" min="0" max="5" step=".01"></slider-input>
                 </td>
               </tr>
 
               <tr data-tip="Set province emblems size multiplier">
                 <td>Province size</td>
                 <td>
-                  <input
-                    id="emblemsProvinceSizeInput"
-                    data-stored="emblemsProvinceSize"
-                    type="number"
-                    min="0"
-                    max="5"
-                    step=".02"
-                    value="1"
-                  />
+                  <slider-input id="emblemsProvinceSizeInput" min="0" max="5" step=".01"></slider-input>
                 </td>
               </tr>
 
               <tr data-tip="Set burg emblems size multiplier">
                 <td>Burg size</td>
                 <td>
-                  <input
-                    id="emblemsBurgSizeInput"
-                    data-stored="emblemsBurgSize"
-                    type="number"
-                    min="0"
-                    max="5"
-                    step=".02"
-                    value="1"
-                  />
+                  <slider-input id="emblemsBurgSizeInput" min="0" max="5" step=".01"></slider-input>
                 </td>
               </tr>
 
@@ -1544,7 +1539,9 @@
               <td></td>
             </tr>
 
-            <tr data-tip="Map seed number. Seed produces the same map only if canvas size and options are the same">
+            <tr
+              data-tip="Map seed number. Press 'Enter' to apply. Seed produces the same map only if canvas size and options are the same"
+            >
               <td>
                 <i
                   data-tip="Show seed history to apply a previous seed"
@@ -1610,7 +1607,7 @@
 
             <tr data-tip="Define current year and era name">
               <td>
-                <i data-locked="0" id="lock_era" class="icon-lock-open"></i>
+                <i data-locked="0" id="lock_year" data-ids="year,era" class="icon-lock-open"></i>
               </td>
               <td>Year and era</td>
               <td>
@@ -2703,6 +2700,24 @@
           />
         </div>
 
+        <button id="labelLetterSpacingShow" data-tip="Show the letter spacing section" class="icon-text-width"></button>
+        <div id="labelLetterSpacingSection" style="display: none">
+          <button
+            id="labelLetterSpacingHide"
+            data-tip="Hide the letter spacing section"
+            class="icon-text-width"
+          ></button>
+          <slider-input
+            id="labelLetterSpacingSize"
+            style="display: inline-block"
+            data-tip="Set the letter spacing size for this label"
+            min="0"
+            max="20"
+            step=".01"
+            value="0"
+          ></slider-input>
+        </div>
+
         <button id="labelAlign" data-tip="Turn text path into a straight line" class="icon-resize-horizontal"></button>
         <button id="labelLegend" data-tip="Edit free text notes (legend) for this label" class="icon-edit"></button>
         <button
@@ -3509,7 +3524,8 @@
 
           <button id="burgEditEmblem" data-tip="Edit emblem" class="icon-shield-alt"></button>
           <button id="burgTogglePreview" data-tip="Toggle preview" class="icon-map"></button>
-          <button id="burgRelocate" data-tip="Relocate burg" class="icon-target"></button>
+          <button id="burgLocate" data-tip="Zoom map and center view in the burg" class="icon-target"></button>
+          <button id="burgRelocate" data-tip="Relocate burg. Click on map to move the burg" class="icon-map-pin"></button>
           <button id="burglLegend" data-tip="Edit free text notes (legend) for this burg" class="icon-edit"></button>
           <button id="burgLock" class="icon-lock-open" onmouseover="showElementLockTip(event)"></button>
           <button
@@ -4871,7 +4887,11 @@
         <div id="zonesBottom">
           <button id="zonesEditorRefresh" data-tip="Refresh the Editor" class="icon-cw"></button>
           <button id="zonesEditStyle" data-tip="Edit zones style in Style Editor" class="icon-adjust"></button>
-          <button id="zonesLegend" data-tip="Toggle Legend box" class="icon-list-bullet"></button>
+          <button
+            id="zonesLegend"
+            data-tip="Toggle Legend box (shows all non-hidden zones)"
+            class="icon-list-bullet"
+          ></button>
           <button
             id="zonesPercentage"
             data-tip="Toggle percentage / absolute values views"
@@ -4922,6 +4942,7 @@
         <div id="notesLegend" contenteditable="true"></div>
         <div style="margin-top: 0.3em">
           <button id="notesFocus" data-tip="Focus on selected object" class="icon-target"></button>
+          <button id="notesGenerateWithAi" data-tip="Generate note with AI" class="icon-robot"></button>
           <button
             id="notesPin"
             data-tip="Toggle notes box dispay: hide or do not hide the box on mouse move"
@@ -4930,6 +4951,32 @@
           <button id="notesDownload" data-tip="Download notes to PC" class="icon-download"></button>
           <button id="notesUpload" data-tip="Upload notes from PC" class="icon-upload"></button>
           <button id="notesRemove" data-tip="Remove this note" class="icon-trash fastDelete"></button>
+        </div>
+      </div>
+
+      <div id="aiGenerator" class="dialog stable" style="display: none">
+        <div style="display: flex; flex-direction: column; gap: 0.3em; width: 100%">
+          <textarea id="aiGeneratorResult" placeholder="Generated text will appear here" cols="30" rows="10"></textarea>
+          <textarea id="aiGeneratorPrompt" placeholder="Type a prompt here" cols="30" rows="5"></textarea>
+          <div style="display: flex; align-items: center; gap: 1em">
+            <label for="aiGeneratorModel"
+              >Model:
+              <select id="aiGeneratorModel"></select>
+            </label>
+
+            <label for="aiGeneratorKey"
+              >Key:
+              <input id="aiGeneratorKey" placeholder="Enter OpenAI API key" class="icon-key" />
+              <a
+                href="https://platform.openai.com/account/api-keys"
+                target="_blank"
+                rel="noreferrer"
+                class="icon-help-circled"
+                style="text-decoration: none"
+                data-tip="Get the key at OpenAI website. The key will be stored in your browser and send to OpenAI API directly. The Map Genenerator doesn't store the key or any generated data"
+              ></a>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -5690,12 +5737,13 @@
         </p>
         <p><b>Latitude:</b> <span id="infoLat"></span></p>
         <p><b>Longitude:</b> <span id="infoLon"></span></p>
+        <p><b>Geozone:</b> <span id="infoGeozone"></span></p>
         <p><b>Area:</b> <span id="infoArea">0</span></p>
         <p><b>Type:</b> <span id="infoFeature">n/a</span></p>
         <p><b>Precipitation:</b> <span id="infoPrec">0</span></p>
         <p><b>River:</b> <span id="infoRiver">no</span></p>
         <p><b>Population:</b> <span id="infoPopulation">0</span></p>
-        <p><b>Elevation:</b> <span id="infoEvelation">0</span></p>
+        <p><b>Elevation:</b> <span id="infoElevation">0</span></p>
         <p><b>Depth:</b> <span id="infoDepth">0</span></p>
         <p><b>Temperature:</b> <span id="infoTemp">0</span></p>
         <p><b>Biome:</b> <span id="infoBiome">n/a</span></p>
@@ -5888,10 +5936,10 @@
 
         <div style="margin: 1em 0 0.3em; font-weight: bold">Export to GeoJSON</div>
         <div>
-          <button onclick="saveGeoJSON_Cells()" data-tip="Download cells data in GeoJSON format">cells</button>
-          <button onclick="saveGeoJSON_Routes()" data-tip="Download routes data in GeoJSON format">routes</button>
-          <button onclick="saveGeoJSON_Rivers()" data-tip="Download rivers data in GeoJSON format">rivers</button>
-          <button onclick="saveGeoJSON_Markers()" data-tip="Download markers data in GeoJSON format">markers</button>
+          <button onclick="saveGeoJsonCells()" data-tip="Download cells data in GeoJSON format">cells</button>
+          <button onclick="saveGeoJsonRoutes()" data-tip="Download routes data in GeoJSON format">routes</button>
+          <button onclick="saveGeoJsonRivers()" data-tip="Download rivers data in GeoJSON format">rivers</button>
+          <button onclick="saveGeoJsonMarkers()" data-tip="Download markers data in GeoJSON format">markers</button>
         </div>
         <p>
           GeoJSON format is used in GIS tools such as QGIS. Check out
@@ -7807,6 +7855,27 @@
           <pattern id="pattern_flatHex" width="43.4" height="25" patternUnits="userSpaceOnUse" fill="none">
             <path d="M 43.4,0 36.2,12.5 43.4,25 M 21.7,12.5 H 36.2 Z M 0,0 H 14.5 L 21.7,12.5 14.5,25 H 0" />
           </pattern>
+          <pattern id="pattern_square45deg" width="35.355" height="35.355" patternUnits="userSpaceOnUse" fill="none">
+            <path d="M 0 0 L 35.355 35.355 M 0 35.355 L 35.355 0" />
+          </pattern>
+          <pattern id="pattern_squareTruncated" width="25" height="25" patternUnits="userSpaceOnUse" fill="none">
+            <path d="M 8.33 25 L 0 16.66 V 8.33 L 8.33 0 16.66 0 25 8.33  M 16.66 25 L 25 16.66 L 25 8.33 M 8.33 25 L 16.66 25" />
+          </pattern>
+          <pattern id="pattern_squareTetrakis" width="25" height="25" patternUnits="userSpaceOnUse" fill="none">
+            <path d="M 25 0 L 0 0 0 25 M 0 0 L 25 25 M 0 25 L 25 0 M 12.5 0 L 12.5 25 M 0 12.5 L 25 12.5 M 0 25 L 25 25 L 25 0" />
+          </pattern>
+          <pattern id="pattern_triangleHorizontal" width="41.76" height="72.33" patternUnits="userSpaceOnUse" fill="none">
+            <path d="M 41.76 36.165 H 0 L 20.88 0 41.76 36.165 20.88 72.33 0 36.165 M 0 0 H 72.33 M 0 72.33 L 41.76 72.33" />
+          </pattern>
+          <pattern id="pattern_triangleVertical" width="72.33" height="41.76" patternUnits="userSpaceOnUse" fill="none">
+            <path d="M 36.165 0 L 0 20.88 36.165 41.76 72.33 20.88 36.165 0 V 41.76 M 0 0 V 72.33 M 72.33 0 L 72.33 41.76">
+          </pattern>
+          <pattern id="pattern_trihexagonal" width="25" height="43.4" patternUnits="userSpaceOnUse" fill="none">
+            <path d="M 25 10.85 H 0 L 18.85 43.4 25 32.55 H 0 L 18.85 0 25 10.85" />
+          </pattern>
+          <pattern id="pattern_rhombille" width="82.5" height="50" patternUnits="userSpaceOnUse" fill="none">
+            <path d="M 13.8 50 L 0 25 13.8 0 H 41.2 L 27.5 25 41.2 50 55 25 41.2 0 68.8 0 82.5 25 68.8 50 M 0 25 H 27.5 M 55 25 H 82.5 M 13.8 50 H 41.2 L 68.8 50" />
+          </pattern>
         </g>
 
         <g id="defs-hatching">
@@ -7971,7 +8040,7 @@
     <script src="libs/indexedDB.js?v=1.99.00"></script>
 
     <script src="utils/shorthands.js?v=1.99.00"></script>
-    <script src="utils/commonUtils.js?v=1.99.00"></script>
+    <script src="utils/commonUtils.js?v=1.103.0"></script>
     <script src="utils/arrayUtils.js?v=1.99.00"></script>
     <script src="utils/functionUtils.js?v=1.99.00"></script>
     <script src="utils/colorUtils.js?v=1.99.00"></script>
@@ -7983,13 +8052,14 @@
     <script src="utils/stringUtils.js?v=1.99.00"></script>
     <script src="utils/languageUtils.js?v=1.99.00"></script>
     <script src="utils/unitUtils.js?v=1.99.00"></script>
+    <script src="utils/pathUtils.js?v=1.100.00"></script>
     <script defer src="utils/debugUtils.js?v=1.99.00"></script>
 
     <script src="modules/voronoi.js"></script>
     <script src="config/heightmap-templates.js"></script>
     <script src="config/precreated-heightmaps.js"></script>
     <script src="modules/heightmap-generator.js?v=1.99.00"></script>
-    <script src="modules/ocean-layers.js?v=1.99.00"></script>
+    <script src="modules/ocean-layers.js?v=1.100.00"></script>
     <script src="modules/river-generator.js?v=1.99.05"></script>
     <script src="modules/lakes.js?v=1.99.00"></script>
     <script src="modules/biomes.js?v=1.99.00"></script>
@@ -8000,27 +8070,28 @@
     <script src="modules/routes-generator.js?v=1.99.04"></script>
     <script src="modules/religions-generator.js?v=1.99.05"></script>
     <script src="modules/military-generator.js?v=1.99.00"></script>
-    <script src="modules/markers-generator.js?v=1.99.00"></script>
+    <script src="modules/markers-generator.js?v=1.103.02"></script>
+    <script src="modules/zones-generator.js?v=1.103.7"></script>
     <script src="modules/coa-generator.js?v=1.99.00"></script>
-    <script src="modules/submap.js?v=1.99.00"></script>
+    <script src="modules/submap.js?v=1.100.00"></script>
     <script src="libs/polylabel.min.js"></script>
     <script src="libs/lineclip.min.js"></script>
     <script src="libs/alea.min.js"></script>
     <script src="modules/fonts.js?v=1.99.03"></script>
-    <script src="modules/ui/layers.js?v=1.99.05"></script>
+    <script src="modules/ui/layers.js?v=1.101.00"></script>
     <script src="modules/ui/measurers.js?v=1.99.00"></script>
-    <script src="modules/ui/stylePresets.js?v=1.99.03"></script>
+    <script src="modules/ui/style-presets.js?v=1.100.00"></script>
 
-    <script src="modules/ui/general.js?v=1.99.05"></script>
-    <script src="modules/ui/options.js?v=1.99.05"></script>
-    <script src="main.js?v=1.99.00"></script>
+    <script src="modules/ui/general.js?v=1.103.5"></script>
+    <script src="modules/ui/options.js?v=1.100.00"></script>
+    <script src="main.js?v=1.100.00"></script>
 
     <script defer src="modules/relief-icons.js?v=1.99.05"></script>
-    <script defer src="modules/ui/style.js?v=1.99.05"></script>
+    <script defer src="modules/ui/style.js?v=1.101.00"></script>
     <script defer src="modules/ui/editors.js?v=1.99.05"></script>
-    <script defer src="modules/ui/tools.js?v=1.99.00"></script>
+    <script defer src="modules/ui/tools.js?v=1.100.00"></script>
     <script defer src="modules/ui/world-configurator.js?v=1.99.00"></script>
-    <script defer src="modules/ui/heightmap-editor.js?v=1.99.05"></script>
+    <script defer src="modules/ui/heightmap-editor.js?v=1.100.00"></script>
     <script defer src="modules/ui/provinces-editor.js?v=1.99.05"></script>
     <script defer src="modules/ui/biomes-editor.js?v=1.99.05"></script>
     <script defer src="modules/ui/namesbase-editor.js?v=1.99.00"></script>
@@ -8028,21 +8099,22 @@
     <script defer src="modules/ui/temperature-graph.js?v=1.99.00"></script>
     <script defer src="modules/ui/routes-editor.js?v=1.99.02"></script>
     <script defer src="modules/ui/routes-creator.js?v=1.99.02"></script>
-    <script defer src="modules/ui/route-group-editor.js?v=1.99.00"></script>
+    <script defer src="modules/ui/route-group-editor.js?v=1.103.8"></script>
     <script defer src="modules/ui/ice-editor.js?v=1.99.00"></script>
     <script defer src="modules/ui/lakes-editor.js?v=1.99.00"></script>
     <script defer src="modules/ui/coastline-editor.js?v=1.99.00"></script>
-    <script defer src="modules/ui/labels-editor.js?v=1.99.00"></script>
+    <script defer src="modules/ui/labels-editor.js?v=1.101.00"></script>
     <script defer src="modules/ui/rivers-editor.js?v=1.99.00"></script>
     <script defer src="modules/ui/rivers-creator.js?v=1.99.00"></script>
     <script defer src="modules/ui/relief-editor.js?v=1.99.00"></script>
-    <script defer src="modules/ui/burg-editor.js?v=1.99.05"></script>
+    <script defer src="modules/ui/burg-editor.js?v=1.102.00"></script>
     <script defer src="modules/ui/units-editor.js?v=1.99.05"></script>
-    <script defer src="modules/ui/notes-editor.js?v=1.99.00"></script>
+    <script defer src="modules/ui/notes-editor.js?v=1.99.06"></script>
+    <script defer src="modules/ui/ai-generator.js?v=1.99.09"></script>
     <script defer src="modules/ui/diplomacy-editor.js?v=1.99.00"></script>
-    <script defer src="modules/ui/zones-editor.js?v=1.99.00"></script>
-    <script defer src="modules/ui/burgs-overview.js?v=1.99.05"></script>
-    <script defer src="modules/ui/routes-overview.js?v=1.99.02"></script>
+    <script defer src="modules/ui/zones-editor.js?v=1.100.00"></script>
+    <script defer src="modules/ui/burgs-overview.js?v=1.100.00"></script>
+    <script defer src="modules/ui/routes-overview.js?v=1.100.00"></script>
     <script defer src="modules/ui/rivers-overview.js?v=1.99.00"></script>
     <script defer src="modules/ui/military-overview.js?v=1.99.00"></script>
     <script defer src="modules/ui/regiments-overview.js?v=1.99.00"></script>
@@ -8052,14 +8124,14 @@
     <script defer src="modules/ui/emblems-editor.js?v=1.99.00"></script>
     <script defer src="modules/ui/markers-editor.js?v=1.99.00"></script>
     <script defer src="modules/ui/3d.js?v=1.99.00"></script>
-    <script defer src="modules/ui/submap.js?v=1.99.05"></script>
-    <script defer src="modules/ui/hotkeys.js?v=1.99.05"></script>
+    <script defer src="modules/ui/submap.js?v=1.99.10"></script>
+    <script defer src="modules/ui/hotkeys.js?v=1.99.15"></script>
     <script defer src="modules/coa-renderer.js?v=1.99.00"></script>
     <script defer src="libs/rgbquant.min.js"></script>
     <script defer src="libs/jquery.ui.touch-punch.min.js"></script>
-    <script defer src="modules/io/save.js?v=1.99.00"></script>
-    <script defer src="modules/io/load.js?v=1.99.05"></script>
+    <script defer src="modules/io/save.js?v=1.100.00"></script>
+    <script defer src="modules/io/load.js?v=1.103.4"></script>
     <script defer src="modules/io/cloud.js?v=1.99.00"></script>
-    <script defer src="modules/io/export.js?v=1.99.00"></script>
+    <script defer src="modules/io/export.js?v=1.100.00"></script>
   </body>
 </html>
