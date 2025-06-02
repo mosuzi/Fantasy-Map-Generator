@@ -8,33 +8,30 @@ function restoreDefaultEvents() {
   svg.call(zoom);
   viewbox.style("cursor", "default").on(".drag", null).on("click", clicked).on("touchmove mousemove", onMouseMove);
   legend.call(d3.drag().on("start", dragLegendBox));
+  svg.call(zoom);
 }
 
-// on viewbox click event - run function based on target
+// handle viewbox click
 function clicked() {
   const el = d3.event.target;
-  if (!el || !el.parentElement || !el.parentElement.parentElement) return;
-  const parent = el.parentElement;
-  const grand = parent.parentElement;
-  const great = grand.parentElement;
-  const p = d3.mouse(this);
-  const i = findCell(p[0], p[1]);
+  const parent = el?.parentElement;
+  const grand = parent?.parentElement;
+  const great = grand?.parentElement;
+  const ancestor = great?.parentElement;
+  if (!ancestor) return;
 
   if (grand.id === "emblems") editEmblem();
   else if (parent.id === "rivers") editRiver(el.id);
   else if (grand.id === "routes") editRoute(el.id);
-  else if (el.tagName === "tspan" && grand.parentNode.parentNode.id === "labels") editLabel();
+  else if (ancestor.id === "labels" && el.tagName === "tspan") editLabel();
   else if (grand.id === "burgLabels") editBurg();
   else if (grand.id === "burgIcons") editBurg();
   else if (parent.id === "ice") editIce();
   else if (parent.id === "terrain") editReliefIcon();
   else if (grand.id === "markers" || great.id === "markers") editMarker();
   else if (grand.id === "coastline") editCoastline();
+  else if (grand.id === "lakes") editLake();
   else if (great.id === "armies") editRegiment();
-  else if (pack.cells.t[i] === 1) {
-    const node = byId("island_" + pack.cells.f[i]);
-    editCoastline(node);
-  } else if (grand.id === "lakes") editLake();
 }
 
 // clear elSelected variable
@@ -182,6 +179,7 @@ function addBurg(point) {
   burgLabels
     .select("#towns")
     .append("text")
+    .attr("text-rendering", "optimizeSpeed")
     .attr("id", "burgLabel" + i)
     .attr("data-id", i)
     .attr("x", x)
@@ -397,12 +395,12 @@ function createVillageGeneratorLink(burg) {
   else if (cells.r[cell]) tags.push("river");
   else if (pop < 200 && each(4)(cell)) tags.push("pond");
 
-  const connections = pack.cells.routes[cell] || {};
-  const roads = Object.values(connections).filter(routeId => {
-    const route = pack.routes[routeId];
+  const roadsNumber = Object.values(pack.cells.routes[cell] || {}).filter(routeId => {
+    const route = pack.routes.find(route => route.i === routeId);
+    if (!route) return false;
     return route.group === "roads" || route.group === "trails";
   }).length;
-  tags.push(roads > 1 ? "highway" : roads === 1 ? "dead end" : "isolated");
+  tags.push(roadsNumber > 1 ? "highway" : roadsNumber === 1 ? "dead end" : "isolated");
 
   const biome = cells.biome[cell];
   const arableBiomes = cells.r[cell] ? [1, 2, 3, 4, 5, 6, 7, 8] : [5, 6, 7, 8];
@@ -467,6 +465,7 @@ function drawLegend(name, data) {
 
       labels
         .append("text")
+        .attr("text-rendering", "optimizeSpeed")
         .text(data[i][2])
         .attr("x", offset + colorBoxSize * 1.6)
         .attr("y", fontSize / 1.6 + lineHeight + l * lineHeight + vOffset);
@@ -477,6 +476,7 @@ function drawLegend(name, data) {
   const offset = colOffset + legend.node().getBBox().width / 2;
   labels
     .append("text")
+    .attr("text-rendering", "optimizeSpeed")
     .attr("text-anchor", "middle")
     .attr("font-weight", "bold")
     .attr("font-size", "1.2em")
@@ -1168,25 +1168,66 @@ function selectIcon(initial, callback) {
       const cell = row.insertCell(i % 17);
       cell.innerHTML = icons[i];
     }
+
+    // find external images used as icons and show them
+    const externalResources = new Set();
+    const isExternal = url => url.startsWith("http") || url.startsWith("data:image");
+
+    options.military.forEach(unit => {
+      if (isExternal(unit.icon)) externalResources.add(unit.icon);
+    });
+
+    pack.states.forEach(state => {
+      state?.military?.forEach(regiment => {
+        if (isExternal(regiment.icon)) externalResources.add(regiment.icon);
+      });
+    });
+
+    externalResources.forEach(addExternalImage);
   }
 
-  input.oninput = e => callback(input.value);
+  input.oninput = () => callback(input.value);
+
   table.onclick = e => {
     if (e.target.tagName === "TD") {
       input.value = e.target.textContent;
       callback(input.value);
     }
   };
+
   table.onmouseover = e => {
     if (e.target.tagName === "TD") tip(`Click to select ${e.target.textContent} icon`);
   };
+
+  function addExternalImage(url) {
+    const addedIcons = byId("addedIcons");
+    const image = document.createElement("div");
+    image.style.cssText = `width: 2.2em; height: 2.2em; background-size: cover; background-image: url(${url})`;
+    addedIcons.appendChild(image);
+    image.onclick = () => callback(url);
+  }
+
+  byId("addImage").onclick = function () {
+    const input = this.previousElementSibling;
+    const ulr = input.value;
+    if (!ulr) return tip("Enter image URL to add", false, "error", 4000);
+    if (!ulr.match(/^((http|https):\/\/)|data\:image\//)) return tip("Enter valid URL", false, "error", 4000);
+    addExternalImage(ulr);
+    callback(ulr);
+    input.value = "";
+  };
+
+  byId("addedIcons")
+    .querySelectorAll("div")
+    .forEach(div => {
+      div.onclick = () => callback(div.style.backgroundImage.slice(5, -2));
+    });
 
   $("#iconSelector").dialog({
     width: fitContent(),
     title: "Select Icon",
     buttons: {
       Apply: function () {
-        callback(input.value || "⠀");
         $(this).dialog("close");
       },
       Close: function () {
@@ -1252,18 +1293,18 @@ function refreshAllEditors() {
 // dynamically loaded editors
 async function editStates() {
   if (customization) return;
-  const Editor = await import("../dynamic/editors/states-editor.js?v=1.99.05");
+  const Editor = await import("../dynamic/editors/states-editor.js?v=1.108.1");
   Editor.open();
 }
 
 async function editCultures() {
   if (customization) return;
-  const Editor = await import("../dynamic/editors/cultures-editor.js?v=1.99.05");
+  const Editor = await import("../dynamic/editors/cultures-editor.js?v=1.105.23");
   Editor.open();
 }
 
 async function editReligions() {
   if (customization) return;
-  const Editor = await import("../dynamic/editors/religions-editor.js?v=1.99.05");
+  const Editor = await import("../dynamic/editors/religions-editor.js?v=1.104.0");
   Editor.open();
 }

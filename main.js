@@ -4,7 +4,7 @@
 
 // set debug options
 const PRODUCTION = location.hostname && location.hostname !== "localhost" && location.hostname !== "127.0.0.1";
-const DEBUG = localStorage.getItem("debug");
+const DEBUG = JSON.safeParse(localStorage.getItem("debug")) || {};
 const INFO = true;
 const TIME = true;
 const WARN = true;
@@ -14,6 +14,7 @@ const ERROR = true;
 const MOBILE = window.innerWidth < 600 || navigator.userAgentData?.mobile;
 
 // typed arrays max values
+const INT8_MAX = 127;
 const UINT8_MAX = 255;
 const UINT16_MAX = 65535;
 const UINT32_MAX = 4294967295;
@@ -72,7 +73,7 @@ let trails = routes.append("g").attr("id", "trails");
 let searoutes = routes.append("g").attr("id", "searoutes");
 let temperature = viewbox.append("g").attr("id", "temperature");
 let coastline = viewbox.append("g").attr("id", "coastline");
-let ice = viewbox.append("g").attr("id", "ice").style("display", "none");
+let ice = viewbox.append("g").attr("id", "ice");
 let prec = viewbox.append("g").attr("id", "prec").style("display", "none");
 let population = viewbox.append("g").attr("id", "population");
 let emblems = viewbox.append("g").attr("id", "emblems").style("display", "none");
@@ -80,7 +81,7 @@ let labels = viewbox.append("g").attr("id", "labels");
 let icons = viewbox.append("g").attr("id", "icons");
 let burgIcons = icons.append("g").attr("id", "burgIcons");
 let anchors = icons.append("g").attr("id", "anchors");
-let armies = viewbox.append("g").attr("id", "armies").style("display", "none");
+let armies = viewbox.append("g").attr("id", "armies");
 let markers = viewbox.append("g").attr("id", "markers");
 let fogging = viewbox
   .append("g")
@@ -105,10 +106,10 @@ coastline.append("g").attr("id", "lake_island");
 terrs.append("g").attr("id", "oceanHeights");
 terrs.append("g").attr("id", "landHeights");
 
+let burgLabels = labels.append("g").attr("id", "burgLabels");
 labels.append("g").attr("id", "states");
 labels.append("g").attr("id", "addedLabels");
 
-let burgLabels = labels.append("g").attr("id", "burgLabels");
 burgIcons.append("g").attr("id", "cities");
 burgLabels.append("g").attr("id", "cities");
 anchors.append("g").attr("id", "cities");
@@ -169,7 +170,7 @@ let scale = 1;
 let viewX = 0;
 let viewY = 0;
 
-function onZoom() {
+const onZoom = debounce(function () {
   const {k, x, y} = d3.event.transform;
 
   const isScaleChanged = Boolean(scale - k);
@@ -181,9 +182,8 @@ function onZoom() {
   viewY = y;
 
   handleZoom(isScaleChanged, isPositionChanged);
-}
-const onZoomDebouced = debounce(onZoom, 50);
-const zoom = d3.zoom().scaleExtent([1, 20]).on("zoom", onZoomDebouced);
+}, 50);
+const zoom = d3.zoom().scaleExtent([1, 20]).on("zoom", onZoom);
 
 // default options, based on Earth data
 let options = {
@@ -313,9 +313,11 @@ async function checkLoadParameters() {
 async function generateMapOnLoad() {
   await applyStyleOnLoad(); // apply previously selected default or custom style
   await generate(); // generate map
-  applyPreset(); // apply saved layers preset
+  applyLayersPreset(); // apply saved layers preset and reder layers
+  drawLayers();
   fitMapToScreen();
   focusOn(); // based on searchParams focus on point, cell or burg from MFCG
+  toggleAssistant();
 }
 
 // focus on coordinates, cell or burg provided in searchParams
@@ -362,6 +364,31 @@ function focusOn() {
     const x = +params.get("x") || graphWidth / 2;
     const y = +params.get("y") || graphHeight / 2;
     zoomTo(x, y, scale, 1600);
+  }
+}
+
+let isAssistantLoaded = false;
+function toggleAssistant() {
+  const assistantContainer = byId("chat-widget-container");
+  const showAssistant = byId("azgaarAssistant").value === "show";
+
+  if (showAssistant) {
+    if (isAssistantLoaded) {
+      assistantContainer.style.display = "block";
+    } else {
+      import("./libs/openwidget.min.js").then(() => {
+        isAssistantLoaded = true;
+        setTimeout(() => {
+          const bubble = byId("chat-widget-minimized");
+          if (bubble) {
+            bubble.dataset.tip = "Click to open the Assistant";
+            bubble.on("mouseover", showDataTip);
+          }
+        }, 5000);
+      });
+    }
+  } else if (isAssistantLoaded) {
+    assistantContainer.style.display = "none";
   }
 }
 
@@ -432,7 +459,9 @@ function findBurgForMFCG(params) {
 function handleZoom(isScaleChanged, isPositionChanged) {
   viewbox.attr("transform", `translate(${viewX} ${viewY}) scale(${scale})`);
 
-  if (isPositionChanged) drawCoordinates();
+  if (isPositionChanged) {
+    if (layerIsOn("toggleCoordinates")) drawCoordinates();
+  }
 
   if (isScaleChanged) {
     invokeActiveZooming();
@@ -464,14 +493,6 @@ function zoomTo(x, y, z = 8, d = 2000) {
 // Reset zoom to initial
 function resetZoom(d = 1000) {
   svg.transition().duration(d).call(zoom.transform, d3.zoomIdentity);
-}
-
-// calculate x y extreme points of viewBox
-function getViewBoxExtent() {
-  return [
-    [Math.abs(viewX / scale), Math.abs(viewY / scale)],
-    [Math.abs(viewX / scale) + graphWidth / scale, Math.abs(viewY / scale) + graphHeight / scale]
-  ];
 }
 
 // active zooming feature
@@ -544,21 +565,6 @@ function invokeActiveZooming() {
   }
 }
 
-async function renderGroupCOAs(g) {
-  const [group, type] =
-    g.id === "burgEmblems"
-      ? [pack.burgs, "burg"]
-      : g.id === "provinceEmblems"
-      ? [pack.provinces, "province"]
-      : [pack.states, "state"];
-  for (let use of g.children) {
-    const i = +use.dataset.i;
-    const id = type + "COA" + i;
-    COArenderer.trigger(id, group[i].coa);
-    use.setAttribute("href", "#" + id);
-  }
-}
-
 // add drag to upload logic, pull request from @evyatron
 void (function addDragToUpload() {
   document.addEventListener("dragover", function (e) {
@@ -624,8 +630,7 @@ async function generate(options) {
     grid.cells.h = await HeightmapGenerator.generate(grid);
     pack = {}; // reset pack
 
-    markFeatures();
-    markupGridOcean();
+    Features.markupGrid();
     addLakesInDeepDepressions();
     openNearSeaLakes();
 
@@ -636,11 +641,10 @@ async function generate(options) {
     generatePrecipitation();
 
     reGraph();
-    drawCoastline();
+    Features.markupPack();
+    createDefaultRuler();
 
     Rivers.generate();
-    drawRivers();
-    Lakes.defineGroup();
     Biomes.define();
 
     rankCells();
@@ -650,15 +654,12 @@ async function generate(options) {
     Routes.generate();
     Religions.generate();
     BurgsAndStates.defineStateForms();
-    BurgsAndStates.generateProvinces();
+    Provinces.generate();
+    Provinces.getPoles();
     BurgsAndStates.defineBurgFeatures();
 
-    drawStates();
-    drawBorders();
-    drawStateLabels();
-
     Rivers.specify();
-    Lakes.generateName();
+    Features.specify();
 
     Military.generate();
     Markers.generate();
@@ -682,10 +683,7 @@ async function generate(options) {
       title: "Generation error",
       width: "32em",
       buttons: {
-        "Clear data": function () {
-          localStorage.clear();
-          localStorage.setItem("version", VERSION);
-        },
+        "Clear cache": () => cleanupData(),
         Regenerate: function () {
           regenerateMap("generation error");
           $(this).dialog("close");
@@ -716,75 +714,13 @@ function setSeed(precreatedSeed) {
   Math.random = aleaPRNG(seed);
 }
 
-// Mark features (ocean, lakes, islands) and calculate distance field
-function markFeatures() {
-  TIME && console.time("markFeatures");
-  Math.random = aleaPRNG(seed); // get the same result on heightmap edit in Erase mode
-
-  const cells = grid.cells;
-  const heights = grid.cells.h;
-  cells.f = new Uint16Array(cells.i.length); // cell feature number
-  cells.t = new Int8Array(cells.i.length); // cell type: 1 = land coast; -1 = water near coast
-  grid.features = [0];
-
-  for (let i = 1, queue = [0]; queue[0] !== -1; i++) {
-    cells.f[queue[0]] = i; // feature number
-    const land = heights[queue[0]] >= 20;
-    let border = false; // true if feature touches map border
-
-    while (queue.length) {
-      const q = queue.pop();
-      if (cells.b[q]) border = true;
-
-      cells.c[q].forEach(c => {
-        const cLand = heights[c] >= 20;
-        if (land === cLand && !cells.f[c]) {
-          cells.f[c] = i;
-          queue.push(c);
-        } else if (land && !cLand) {
-          cells.t[q] = 1;
-          cells.t[c] = -1;
-        }
-      });
-    }
-    const type = land ? "island" : border ? "ocean" : "lake";
-    grid.features.push({i, land, border, type});
-
-    queue[0] = cells.f.findIndex(f => !f); // find unmarked cell
-  }
-
-  TIME && console.timeEnd("markFeatures");
-}
-
-function markupGridOcean() {
-  TIME && console.time("markupGridOcean");
-  markup(grid.cells, -2, -1, -10);
-  TIME && console.timeEnd("markupGridOcean");
-}
-
-// Calculate cell-distance to coast for every cell
-function markup(cells, start, increment, limit) {
-  for (let t = start, count = Infinity; count > 0 && t > limit; t += increment) {
-    count = 0;
-    const prevT = t - increment;
-    for (let i = 0; i < cells.i.length; i++) {
-      if (cells.t[i] !== prevT) continue;
-
-      for (const c of cells.c[i]) {
-        if (cells.t[c]) continue;
-        cells.t[c] = t;
-        count++;
-      }
-    }
-  }
-}
-
 function addLakesInDeepDepressions() {
   TIME && console.time("addLakesInDeepDepressions");
+  const elevationLimit = +byId("lakeElevationLimitOutput").value;
+  if (elevationLimit === 80) return;
+
   const {cells, features} = grid;
   const {c, h, b} = cells;
-  const ELEVATION_LIMIT = +byId("lakeElevationLimitOutput").value;
-  if (ELEVATION_LIMIT === 80) return;
 
   for (const i of cells.i) {
     if (b[i] || h[i] < 20) continue;
@@ -793,7 +729,7 @@ function addLakesInDeepDepressions() {
     if (h[i] > minHeight) continue;
 
     let deep = true;
-    const threshold = h[i] + ELEVATION_LIMIT;
+    const threshold = h[i] + elevationLimit;
     const queue = [i];
     const checked = [];
     checked[i] = true;
@@ -979,7 +915,7 @@ function calculateTemperatures() {
     const [, y] = grid.points[rowCellId];
     const rowLatitude = mapCoordinates.latN - (y / graphHeight) * mapCoordinates.latT; // [90; -90]
     const tempSeaLevel = calculateSeaLevelTemp(rowLatitude);
-    DEBUG && console.info(`${rn(rowLatitude)}° sea temperature: ${rn(tempSeaLevel)}°C`);
+    DEBUG.temperature && console.info(`${rn(rowLatitude)}° sea temperature: ${rn(tempSeaLevel)}°C`);
 
     for (let cellId = rowCellId; cellId < rowCellId + grid.cellsX; cellId++) {
       const tempAltitudeDrop = getAltitudeTemperatureDrop(cells.h[cellId]);
@@ -1131,7 +1067,7 @@ function generatePrecipitation() {
           const from = west[0][0],
             to = west[west.length - 1][0];
           const y = (grid.points[from][1] + grid.points[to][1]) / 2;
-          wind.append("text").attr("x", 20).attr("y", y).text("\u21C9");
+          wind.append("text").attr("text-rendering", "optimizeSpeed").attr("x", 20).attr("y", y).text("\u21C9");
         }
       }
       if (easterly.length > 1) {
@@ -1142,6 +1078,7 @@ function generatePrecipitation() {
           const y = (grid.points[from][1] + grid.points[to][1]) / 2;
           wind
             .append("text")
+            .attr("text-rendering", "optimizeSpeed")
             .attr("x", graphWidth - 52)
             .attr("y", y)
             .text("\u21C7");
@@ -1152,12 +1089,14 @@ function generatePrecipitation() {
     if (northerly)
       wind
         .append("text")
+        .attr("text-rendering", "optimizeSpeed")
         .attr("x", graphWidth / 2)
         .attr("y", 42)
         .text("\u21CA");
     if (southerly)
       wind
         .append("text")
+        .attr("text-rendering", "optimizeSpeed")
         .attr("x", graphWidth / 2)
         .attr("y", graphHeight - 20)
         .text("\u21C8");
@@ -1220,222 +1159,6 @@ function reGraph() {
   TIME && console.timeEnd("reGraph");
 }
 
-// Detect and draw the coastline
-function drawCoastline() {
-  TIME && console.time("drawCoastline");
-  reMarkFeatures();
-
-  const cells = pack.cells,
-    vertices = pack.vertices,
-    n = cells.i.length,
-    features = pack.features;
-  const used = new Uint8Array(features.length); // store connected features
-  const largestLand = d3.scan(
-    features.map(f => (f.land ? f.cells : 0)),
-    (a, b) => b - a
-  );
-  const landMask = defs.select("#land");
-  const waterMask = defs.select("#water");
-  lineGen.curve(d3.curveBasisClosed);
-
-  for (const i of cells.i) {
-    const startFromEdge = !i && cells.h[i] >= 20;
-    if (!startFromEdge && cells.t[i] !== -1 && cells.t[i] !== 1) continue; // non-edge cell
-    const f = cells.f[i];
-    if (used[f]) continue; // already connected
-    if (features[f].type === "ocean") continue; // ocean cell
-
-    const type = features[f].type === "lake" ? 1 : -1; // type value to search for
-    const start = findStart(i, type);
-    if (start === -1) continue; // cannot start here
-    let vchain = connectVertices(start, type);
-    if (features[f].type === "lake") relax(vchain, 1.2);
-    used[f] = 1;
-    let points = clipPoly(
-      vchain.map(v => vertices.p[v]),
-      1
-    );
-    const area = d3.polygonArea(points); // area with lakes/islands
-    if (area > 0 && features[f].type === "lake") {
-      points = points.reverse();
-      vchain = vchain.reverse();
-    }
-
-    features[f].area = Math.abs(area);
-    features[f].vertices = vchain;
-
-    const path = round(lineGen(points));
-
-    if (features[f].type === "lake") {
-      landMask
-        .append("path")
-        .attr("d", path)
-        .attr("fill", "black")
-        .attr("id", "land_" + f);
-      // waterMask.append("path").attr("d", path).attr("fill", "white").attr("id", "water_"+id); // uncomment to show over lakes
-      lakes
-        .select("#freshwater")
-        .append("path")
-        .attr("d", path)
-        .attr("id", "lake_" + f)
-        .attr("data-f", f); // draw the lake
-    } else {
-      landMask
-        .append("path")
-        .attr("d", path)
-        .attr("fill", "white")
-        .attr("id", "land_" + f);
-      waterMask
-        .append("path")
-        .attr("d", path)
-        .attr("fill", "black")
-        .attr("id", "water_" + f);
-      const g = features[f].group === "lake_island" ? "lake_island" : "sea_island";
-      coastline
-        .select("#" + g)
-        .append("path")
-        .attr("d", path)
-        .attr("id", "island_" + f)
-        .attr("data-f", f); // draw the coastline
-    }
-
-    // draw ruler to cover the biggest land piece
-    if (f === largestLand) {
-      const from = points[d3.scan(points, (a, b) => a[0] - b[0])];
-      const to = points[d3.scan(points, (a, b) => b[0] - a[0])];
-      rulers.create(Ruler, [from, to]);
-    }
-  }
-
-  // find cell vertex to start path detection
-  function findStart(i, t) {
-    if (t === -1 && cells.b[i]) return cells.v[i].find(v => vertices.c[v].some(c => c >= n)); // map border cell
-    const filtered = cells.c[i].filter(c => cells.t[c] === t);
-    const index = cells.c[i].indexOf(d3.min(filtered));
-    return index === -1 ? index : cells.v[i][index];
-  }
-
-  // connect vertices to chain
-  function connectVertices(start, t) {
-    const chain = []; // vertices chain to form a path
-    for (let i = 0, current = start; i === 0 || (current !== start && i < 50000); i++) {
-      const prev = chain[chain.length - 1]; // previous vertex in chain
-      chain.push(current); // add current vertex to sequence
-      const c = vertices.c[current]; // cells adjacent to vertex
-      const v = vertices.v[current]; // neighboring vertices
-      const c0 = c[0] >= n || cells.t[c[0]] === t;
-      const c1 = c[1] >= n || cells.t[c[1]] === t;
-      const c2 = c[2] >= n || cells.t[c[2]] === t;
-      if (v[0] !== prev && c0 !== c1) current = v[0];
-      else if (v[1] !== prev && c1 !== c2) current = v[1];
-      else if (v[2] !== prev && c0 !== c2) current = v[2];
-      if (current === chain[chain.length - 1]) {
-        ERROR && console.error("Next vertex is not found");
-        break;
-      }
-    }
-    return chain;
-  }
-
-  // move vertices that are too close to already added ones
-  function relax(vchain, r) {
-    const p = vertices.p,
-      tree = d3.quadtree();
-
-    for (let i = 0; i < vchain.length; i++) {
-      const v = vchain[i];
-      let [x, y] = [p[v][0], p[v][1]];
-      if (i && vchain[i + 1] && tree.find(x, y, r) !== undefined) {
-        const v1 = vchain[i - 1],
-          v2 = vchain[i + 1];
-        const [x1, y1] = [p[v1][0], p[v1][1]];
-        const [x2, y2] = [p[v2][0], p[v2][1]];
-        [x, y] = [(x1 + x2) / 2, (y1 + y2) / 2];
-        p[v] = [x, y];
-      }
-      tree.add([x, y]);
-    }
-  }
-
-  TIME && console.timeEnd("drawCoastline");
-}
-
-// Re-mark features (ocean, lakes, islands)
-function reMarkFeatures() {
-  TIME && console.time("reMarkFeatures");
-  const cells = pack.cells;
-  const features = (pack.features = [0]);
-
-  cells.f = new Uint16Array(cells.i.length); // cell feature number
-  cells.t = new Int8Array(cells.i.length); // cell type: 1 = land along coast; -1 = water along coast;
-  cells.haven = cells.i.length < 65535 ? new Uint16Array(cells.i.length) : new Uint32Array(cells.i.length); // cell haven (opposite water cell);
-  cells.harbor = new Uint8Array(cells.i.length); // cell harbor (number of adjacent water cells);
-
-  if (!cells.i.length) return; // no cells -> there is nothing to do
-  for (let i = 1, queue = [0]; queue[0] !== -1; i++) {
-    const start = queue[0]; // first cell
-    cells.f[start] = i; // assign feature number
-    const land = cells.h[start] >= 20;
-    let border = false; // true if feature touches map border
-    let cellNumber = 1; // to count cells number in a feature
-
-    while (queue.length) {
-      const q = queue.pop();
-      if (cells.b[q]) border = true;
-      cells.c[q].forEach(function (e) {
-        const eLand = cells.h[e] >= 20;
-        if (land && !eLand) {
-          cells.t[q] = 1;
-          cells.t[e] = -1;
-          if (!cells.haven[q]) defineHaven(q);
-        } else if (land && eLand) {
-          if (!cells.t[e] && cells.t[q] === 1) cells.t[e] = 2;
-          else if (!cells.t[q] && cells.t[e] === 1) cells.t[q] = 2;
-        }
-        if (!cells.f[e] && land === eLand) {
-          queue.push(e);
-          cells.f[e] = i;
-          cellNumber++;
-        }
-      });
-    }
-
-    const type = land ? "island" : border ? "ocean" : "lake";
-    let group;
-    if (type === "ocean") group = defineOceanGroup(cellNumber);
-    else if (type === "island") group = defineIslandGroup(start, cellNumber);
-    features.push({i, land, border, type, cells: cellNumber, firstCell: start, group});
-    queue[0] = cells.f.findIndex(f => !f); // find unmarked cell
-  }
-
-  markup(pack.cells, 3, 1, 0); // markupPackLand
-  markup(pack.cells, -2, -1, -10); // markupPackWater
-
-  function defineHaven(i) {
-    const water = cells.c[i].filter(c => cells.h[c] < 20);
-    const dist2 = water.map(c => (cells.p[i][0] - cells.p[c][0]) ** 2 + (cells.p[i][1] - cells.p[c][1]) ** 2);
-    const closest = water[dist2.indexOf(Math.min.apply(Math, dist2))];
-
-    cells.haven[i] = closest;
-    cells.harbor[i] = water.length;
-  }
-
-  function defineOceanGroup(number) {
-    if (number > grid.cells.i.length / 25) return "ocean";
-    if (number > grid.cells.i.length / 100) return "sea";
-    return "gulf";
-  }
-
-  function defineIslandGroup(cell, number) {
-    if (cell && features[cells.f[cell - 1]].type === "lake") return "lake_island";
-    if (number > grid.cells.i.length / 10) return "continent";
-    if (number > grid.cells.i.length / 1000) return "island";
-    return "isle";
-  }
-
-  TIME && console.timeEnd("reMarkFeatures");
-}
-
 function isWetLand(moisture, temperature, height) {
   if (moisture > 40 && temperature > -2 && height < 25) return true; //near coast
   if (moisture > 24 && temperature > -2 && height > 24 && height < 60) return true; //off coast
@@ -1449,8 +1172,8 @@ function rankCells() {
   cells.s = new Int16Array(cells.i.length); // cell suitability array
   cells.pop = new Float32Array(cells.i.length); // cell population array
 
-  const flMean = d3.median(cells.fl.filter(f => f)) || 0,
-    flMax = d3.max(cells.fl) + d3.max(cells.conf); // to normalize flux
+  const flMean = d3.median(cells.fl.filter(f => f)) || 0;
+  const flMax = d3.max(cells.fl) + d3.max(cells.conf); // to normalize flux
   const areaMean = d3.mean(cells.area); // to adjust population by cell area
 
   for (const i of cells.i) {
@@ -1522,7 +1245,7 @@ const regenerateMap = debounce(async function (options) {
   resetZoom(1000);
   undraw();
   await generate(options);
-  restoreLayers();
+  drawLayers();
   if (ThreeD.options.isOn) ThreeD.redraw();
   if ($("#worldConfigurator").is(":visible")) editWorld();
 
@@ -1541,6 +1264,5 @@ function undraw() {
     .forEach(el => el.remove());
   byId("coas").innerHTML = ""; // remove auto-generated emblems
   notes = [];
-  rulers = new Rulers();
   unfog();
 }

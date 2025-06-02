@@ -3,6 +3,12 @@
 
 // clip polygon by graph bbox
 function clipPoly(points, secure = 0) {
+  if (points.length < 2) return points;
+  if (points.some(point => point === undefined)) {
+    ERROR && console.error("Undefined point in clipPoly", points);
+    return points;
+  }
+
   return polygonclip(points, [0, 0, graphWidth, graphHeight], secure);
 }
 

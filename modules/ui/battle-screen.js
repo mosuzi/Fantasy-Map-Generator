@@ -36,45 +36,31 @@ class Battle {
     modules.Battle = true;
 
     // add listeners
-    document.getElementById("battleType").addEventListener("click", ev => this.toggleChange(ev));
-    document
-      .getElementById("battleType")
-      .nextElementSibling.addEventListener("click", ev => Battle.prototype.context.changeType(ev));
-    document
-      .getElementById("battleNameShow")
-      .addEventListener("click", () => Battle.prototype.context.showNameSection());
-    document
-      .getElementById("battleNamePlace")
-      .addEventListener("change", ev => (Battle.prototype.context.place = ev.target.value));
-    document.getElementById("battleNameFull").addEventListener("change", ev => Battle.prototype.context.changeName(ev));
-    document
-      .getElementById("battleNameCulture")
-      .addEventListener("click", () => Battle.prototype.context.generateName("culture"));
-    document
-      .getElementById("battleNameRandom")
-      .addEventListener("click", () => Battle.prototype.context.generateName("random"));
-    document.getElementById("battleNameHide").addEventListener("click", this.hideNameSection);
-    document.getElementById("battleAddRegiment").addEventListener("click", this.addSide);
-    document.getElementById("battleRoll").addEventListener("click", () => Battle.prototype.context.randomize());
-    document.getElementById("battleRun").addEventListener("click", () => Battle.prototype.context.run());
-    document.getElementById("battleApply").addEventListener("click", () => Battle.prototype.context.applyResults());
-    document.getElementById("battleCancel").addEventListener("click", () => Battle.prototype.context.cancelResults());
-    document.getElementById("battleWiki").addEventListener("click", () => wiki("Battle-Simulator"));
+    byId("battleType").on("click", ev => this.toggleChange(ev));
+    byId("battleType").nextElementSibling.on("click", ev => Battle.prototype.context.changeType(ev));
+    byId("battleNameShow").on("click", () => Battle.prototype.context.showNameSection());
+    byId("battleNamePlace").on("change", ev => (Battle.prototype.context.place = ev.target.value));
+    byId("battleNameFull").on("change", ev => Battle.prototype.context.changeName(ev));
+    byId("battleNameCulture").on("click", () => Battle.prototype.context.generateName("culture"));
+    byId("battleNameRandom").on("click", () => Battle.prototype.context.generateName("random"));
+    byId("battleNameHide").on("click", this.hideNameSection);
+    byId("battleAddRegiment").on("click", this.addSide);
+    byId("battleRoll").on("click", () => Battle.prototype.context.randomize());
+    byId("battleRun").on("click", () => Battle.prototype.context.run());
+    byId("battleApply").on("click", () => Battle.prototype.context.applyResults());
+    byId("battleCancel").on("click", () => Battle.prototype.context.cancelResults());
+    byId("battleWiki").on("click", () => wiki("Battle-Simulator"));
 
-    document.getElementById("battlePhase_attackers").addEventListener("click", ev => this.toggleChange(ev));
-    document
-      .getElementById("battlePhase_attackers")
-      .nextElementSibling.addEventListener("click", ev => Battle.prototype.context.changePhase(ev, "attackers"));
-    document.getElementById("battlePhase_defenders").addEventListener("click", ev => this.toggleChange(ev));
-    document
-      .getElementById("battlePhase_defenders")
-      .nextElementSibling.addEventListener("click", ev => Battle.prototype.context.changePhase(ev, "defenders"));
-    document
-      .getElementById("battleDie_attackers")
-      .addEventListener("click", () => Battle.prototype.context.rollDie("attackers"));
-    document
-      .getElementById("battleDie_defenders")
-      .addEventListener("click", () => Battle.prototype.context.rollDie("defenders"));
+    byId("battlePhase_attackers").on("click", ev => this.toggleChange(ev));
+    byId("battlePhase_attackers").nextElementSibling.on("click", ev =>
+      Battle.prototype.context.changePhase(ev, "attackers")
+    );
+    byId("battlePhase_defenders").on("click", ev => this.toggleChange(ev));
+    byId("battlePhase_defenders").nextElementSibling.on("click", ev =>
+      Battle.prototype.context.changePhase(ev, "defenders")
+    );
+    byId("battleDie_attackers").on("click", () => Battle.prototype.context.rollDie("attackers"));
+    byId("battleDie_defenders").on("click", () => Battle.prototype.context.rollDie("defenders"));
   }
 
   defineType() {
@@ -97,20 +83,16 @@ class Battle {
   }
 
   setType() {
-    document.getElementById("battleType").className = "icon-button-" + this.type;
+    byId("battleType").className = "icon-button-" + this.type;
 
-    const sideSpecific = document.getElementById("battlePhases_" + this.type + "_attackers");
-    const attackers = sideSpecific
-      ? sideSpecific.content
-      : document.getElementById("battlePhases_" + this.type).content;
-    const defenders = sideSpecific
-      ? document.getElementById("battlePhases_" + this.type + "_defenders").content
-      : attackers;
+    const sideSpecific = byId("battlePhases_" + this.type + "_attackers");
+    const attackers = sideSpecific ? sideSpecific.content : byId("battlePhases_" + this.type).content;
+    const defenders = sideSpecific ? byId("battlePhases_" + this.type + "_defenders").content : attackers;
 
-    document.getElementById("battlePhase_attackers").nextElementSibling.innerHTML = "";
-    document.getElementById("battlePhase_defenders").nextElementSibling.innerHTML = "";
-    document.getElementById("battlePhase_attackers").nextElementSibling.append(attackers.cloneNode(true));
-    document.getElementById("battlePhase_defenders").nextElementSibling.append(defenders.cloneNode(true));
+    byId("battlePhase_attackers").nextElementSibling.innerHTML = "";
+    byId("battlePhase_defenders").nextElementSibling.innerHTML = "";
+    byId("battlePhase_attackers").nextElementSibling.append(attackers.cloneNode(true));
+    byId("battlePhase_defenders").nextElementSibling.append(defenders.cloneNode(true));
   }
 
   definePlace() {
@@ -149,7 +131,9 @@ class Battle {
 
     for (const u of options.military) {
       const label = capitalize(u.name.replace(/_/g, " "));
-      headers += `<th data-tip="${label}">${u.icon}</th>`;
+      const isExternal = u.icon.startsWith("http") || u.icon.startsWith("data:image");
+      const iconHTML = isExternal ? `<img src="${u.icon}" width="15" height="15">` : u.icon;
+      headers += `<th data-tip="${label}">${iconHTML}</th>`;
     }
 
     headers += "<th data-tip='Total military''>Total</th></tr></thead>";
@@ -163,9 +147,13 @@ class Battle {
     const state = pack.states[regiment.state];
     const distance = (Math.hypot(this.y - regiment.by, this.x - regiment.bx) * distanceScale) | 0; // distance between regiment and its base
     const color = state.color[0] === "#" ? state.color : "#999";
+
+    const isExternal = regiment.icon.startsWith("http") || regiment.icon.startsWith("data:image");
+    const iconHtml = isExternal
+      ? `<image href="${regiment.icon}" x="0.1em" y="0.1em" width="1.2em" height="1.2em"></image>`
+      : `<text x="50%" y="1em" style="text-anchor: middle">${regiment.icon}</text>`;
     const icon = `<svg width="1.4em" height="1.4em" style="margin-bottom: -.6em; stroke: #333">
-      <rect x="0" y="0" width="100%" height="100%" fill="${color}"></rect>
-      <text x="0" y="1.04em" style="">${regiment.icon}</text></svg>`;
+      <rect x="0" y="0" width="100%" height="100%" fill="${color}"></rect>${iconHtml}</svg>`;
     const body = `<tbody id="battle${state.i}-${regiment.i}">`;
 
     let initial = `<tr class="battleInitial"><td>${icon}</td><td class="regiment" data-tip="${
@@ -200,7 +188,7 @@ class Battle {
   }
 
   addSide() {
-    const body = document.getElementById("regimentSelectorBody");
+    const body = byId("regimentSelectorBody");
     const context = Battle.prototype.context;
     const regiments = pack.states
       .filter(s => s.military && !s.removed)
@@ -246,7 +234,7 @@ class Battle {
     });
 
     applySorting(regimentSelectorHeader);
-    body.addEventListener("click", selectLine);
+    body.on("click", selectLine);
 
     function selectLine(ev) {
       if (ev.target.className === "inactive") {
@@ -277,7 +265,7 @@ class Battle {
         const shift = side === "attackers" ? attackers.length * -8 : (defenders.length - 1) * 8;
         regiment.px = regiment.x;
         regiment.py = regiment.y;
-        Military.moveRegiment(regiment, defenders[0].x, defenders[0].y + shift);
+        moveRegiment(regiment, defenders[0].x, defenders[0].y + shift);
       });
     }
 
@@ -289,15 +277,15 @@ class Battle {
 
   showNameSection() {
     document.querySelectorAll("#battleBottom > button").forEach(el => (el.style.display = "none"));
-    document.getElementById("battleNameSection").style.display = "inline-block";
+    byId("battleNameSection").style.display = "inline-block";
 
-    document.getElementById("battleNamePlace").value = this.place;
-    document.getElementById("battleNameFull").value = this.name;
+    byId("battleNamePlace").value = this.place;
+    byId("battleNameFull").value = this.name;
   }
 
   hideNameSection() {
     document.querySelectorAll("#battleBottom > button").forEach(el => (el.style.display = "inline-block"));
-    document.getElementById("battleNameSection").style.display = "none";
+    byId("battleNameSection").style.display = "none";
   }
 
   changeName(ev) {
@@ -310,8 +298,8 @@ class Battle {
       type === "culture"
         ? Names.getCulture(pack.cells.culture[this.cell], null, null, "")
         : Names.getBase(rand(nameBases.length - 1));
-    document.getElementById("battleNamePlace").value = this.place = place;
-    document.getElementById("battleNameFull").value = this.name = this.defineName();
+    byId("battleNamePlace").value = this.place = place;
+    byId("battleNameFull").value = this.name = this.defineName();
     $("#battleScreen").dialog({title: this.name});
   }
 
@@ -495,7 +483,7 @@ class Battle {
     this[side].power =
       d3.sum(options.military.map(u => (forces[u.name] || 0) * u.power * scheme[phase][u.type])) / adjuster;
     const UIvalue = this[side].power ? Math.max(this[side].power | 0, 1) : 0;
-    document.getElementById("battlePower_" + side).innerHTML = UIvalue;
+    byId("battlePower_" + side).innerHTML = UIvalue;
   }
 
   getInitialMorale() {
@@ -509,7 +497,7 @@ class Battle {
   }
 
   updateMorale(side) {
-    const morale = document.getElementById("battleMorale_" + side);
+    const morale = byId("battleMorale_" + side);
     morale.dataset.tip = morale.dataset.tip.replace(morale.value, "");
     morale.value = this[side].morale | 0;
     morale.dataset.tip += morale.value;
@@ -524,7 +512,7 @@ class Battle {
   }
 
   rollDie(side) {
-    const el = document.getElementById("battleDie_" + side);
+    const el = byId("battleDie_" + side);
     const prev = +el.innerHTML;
     do {
       el.innerHTML = rand(1, 6);
@@ -672,11 +660,11 @@ class Battle {
     this.attackers.phase = phase[0];
     this.defenders.phase = phase[1];
 
-    const buttonA = document.getElementById("battlePhase_attackers");
+    const buttonA = byId("battlePhase_attackers");
     buttonA.className = "icon-button-" + this.attackers.phase;
     buttonA.dataset.tip = buttonA.nextElementSibling.querySelector("[data-phase='" + phase[0] + "']").dataset.tip;
 
-    const buttonD = document.getElementById("battlePhase_defenders");
+    const buttonD = byId("battlePhase_defenders");
     buttonD.className = "icon-button-" + this.defenders.phase;
     buttonD.dataset.tip = buttonD.nextElementSibling.querySelector("[data-phase='" + phase[1] + "']").dataset.tip;
   }
@@ -760,7 +748,7 @@ class Battle {
 
   updateTable(side) {
     for (const r of this[side].regiments) {
-      const tbody = document.getElementById("battle" + r.state + "-" + r.i);
+      const tbody = byId("battle" + r.state + "-" + r.i);
       const battleCasualties = tbody.querySelector(".battleCasualties");
       const battleSurvivors = tbody.querySelector(".battleSurvivors");
 
@@ -794,7 +782,7 @@ class Battle {
     button.style.opacity = 0.5;
     div.style.display = "block";
 
-    document.getElementsByTagName("body")[0].addEventListener("click", hideSection, {once: true});
+    document.getElementsByTagName("body")[0].on("click", hideSection, {once: true});
   }
 
   changeType(ev) {
@@ -811,7 +799,7 @@ class Battle {
   changePhase(ev, side) {
     if (ev.target.tagName !== "BUTTON") return;
     const phase = (this[side].phase = ev.target.dataset.phase);
-    const button = document.getElementById("battlePhase_" + side);
+    const button = byId("battlePhase_" + side);
     button.className = "icon-button-" + phase;
     button.dataset.tip = ev.target.dataset.tip;
     this.calculateStrength(side);
@@ -873,6 +861,8 @@ class Battle {
       r.u = Object.assign({}, r.survivors);
       r.a = d3.sum(Object.values(r.u)); // reg total
       armies.select(`g#${id} > text`).text(Military.getTotal(r)); // update reg box
+
+      moveRegiment(r, r.px, r.py); // move regiment back to initial position
     }
 
     const i = last(pack.markers)?.i + 1 || 0;
@@ -881,7 +871,7 @@ class Battle {
       const marker = {i, x: this.x, y: this.y, cell: this.cell, icon: "⚔️", type: "battlefields", dy: 52};
       pack.markers.push(marker);
       const markerHTML = drawMarker(marker);
-      document.getElementById("markers").insertAdjacentHTML("beforeend", markerHTML);
+      byId("markers").insertAdjacentHTML("beforeend", markerHTML);
     }
 
     const getSide = (regs, n) =>
@@ -909,7 +899,9 @@ class Battle {
 
   cancelResults() {
     // move regiments back to initial positions
-    this.attackers.regiments.concat(this.defenders.regiments).forEach(r => Military.moveRegiment(r, r.px, r.py));
+    this.attackers.regiments.forEach(r => moveRegiment(r, r.px, r.py));
+    this.defenders.regiments.forEach(r => moveRegiment(r, r.px, r.py));
+
     $("#battleScreen").dialog("close");
     this.cleanData();
   }

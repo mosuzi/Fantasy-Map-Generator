@@ -148,6 +148,7 @@ optionsContent.addEventListener("change", event => {
   else if (id === "yearInput") changeYear();
   else if (id === "eraInput") changeEra();
   else if (id === "stateLabelsModeInput") options.stateLabelsMode = value;
+  else if (id === "azgaarAssistant") toggleAssistant();
 });
 
 optionsContent.addEventListener("click", event => {
@@ -209,16 +210,16 @@ function fitMapToScreen() {
   svgHeight = Math.min(+mapHeightInput.value, window.innerHeight);
   svg.attr("width", svgWidth).attr("height", svgHeight);
 
-  const zoomExtent = [
-    [0, 0],
-    [graphWidth, graphHeight]
-  ];
-
   const zoomMin = rn(Math.max(svgWidth / graphWidth, svgHeight / graphHeight), 3);
   zoomExtentMin.value = zoomMin;
   const zoomMax = +zoomExtentMax.value;
 
-  zoom.translateExtent(zoomExtent).scaleExtent([zoomMin, zoomMax]).scaleTo(svg, zoomMin);
+  zoom
+    .translateExtent([
+      [0, 0],
+      [graphWidth, graphHeight]
+    ])
+    .scaleExtent([zoomMin, zoomMax]);
 
   fitScaleBar(scaleBar, svgWidth, svgHeight);
   if (window.fitLegendBox) fitLegendBox();
@@ -250,8 +251,7 @@ const voiceInterval = setInterval(function () {
     select.options.add(new Option(voice.name, i, false));
   });
   if (stored("speakerVoice")) select.value = stored("speakerVoice");
-  // se voice to store
-  else select.value = voices.findIndex(voice => voice.lang === "en-US"); // or to first found English-US
+  else select.value = voices.findIndex(voice => voice.lang === "en-US");
 }, 1000);
 
 function testSpeaker() {
@@ -332,14 +332,10 @@ const cellsDensityMap = {
 
 function changeCellsDensity(value) {
   pointsInput.value = value;
-  const cells = cellsDensityMap[value] || 1000;
+  const cells = cellsDensityMap[value] || pointsInput.dataset.cells;
   pointsInput.dataset.cells = cells;
-  pointsOutputFormatted.value = getCellsDensityValue(cells);
+  pointsOutputFormatted.value = cells / 1000 + "K";
   pointsOutputFormatted.style.color = getCellsDensityColor(cells);
-}
-
-function getCellsDensityValue(cells) {
-  return cells / 1000 + "K";
 }
 
 function getCellsDensityColor(cells) {
@@ -447,6 +443,7 @@ function changeDialogsTheme(themeColor, transparency) {
   };
 
   const theme = [
+    {name: "--bg-opacity", value: alpha},
     {name: "--bg-main", h, s, l, alpha},
     {name: "--bg-lighter", h, s, l: l + 0.02, alpha},
     {name: "--bg-light", h, s: s - 0.02, l: l + 0.06, alpha},
@@ -459,8 +456,9 @@ function changeDialogsTheme(themeColor, transparency) {
   ];
 
   const sx = document.documentElement.style;
-  theme.forEach(({name, h, s, l, alpha}) => {
-    sx.setProperty(name, getRGBA(h, s, l, alpha));
+  theme.forEach(({name, value, h, s, l, alpha}) => {
+    if (value !== undefined) sx.setProperty(name, value);
+    else sx.setProperty(name, getRGBA(h, s, l, alpha));
   });
 }
 
@@ -556,10 +554,10 @@ function applyStoredOptions() {
     if (key.slice(0, 5) === "style") applyOption(stylePreset, key, key.slice(5));
   }
 
-  if (stored("winds")) options.winds = localStorage.getItem("winds").split(",").map(Number);
-  if (stored("temperatureEquator")) options.temperatureEquator = +localStorage.getItem("temperatureEquator");
-  if (stored("temperatureNorthPole")) options.temperatureNorthPole = +localStorage.getItem("temperatureNorthPole");
-  if (stored("temperatureSouthPole")) options.temperatureSouthPole = +localStorage.getItem("temperatureSouthPole");
+  if (stored("winds")) options.winds = stored("winds").split(",").map(Number);
+  if (stored("temperatureEquator")) options.temperatureEquator = +stored("temperatureEquator");
+  if (stored("temperatureNorthPole")) options.temperatureNorthPole = +stored("temperatureNorthPole");
+  if (stored("temperatureSouthPole")) options.temperatureSouthPole = +stored("temperatureSouthPole");
   if (stored("military")) options.military = JSON.parse(stored("military"));
 
   if (stored("tooltipSize")) changeTooltipSize(stored("tooltipSize"));
@@ -701,12 +699,6 @@ function changeEra() {
 async function openTemplateSelectionDialog() {
   const HeightmapSelectionDialog = await import("../dynamic/heightmap-selection.js?v=1.96.00");
   HeightmapSelectionDialog.open();
-}
-
-// remove all saved data from LocalStorage and reload the page
-function restoreDefaultOptions() {
-  localStorage.clear();
-  location.reload();
 }
 
 // Sticked menu Options listeners

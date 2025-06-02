@@ -40,8 +40,8 @@ function editNotes(id, name) {
 
   $("#notesEditor").dialog({
     title: "Notes Editor",
-    width: window.innerWidth * 0.8,
-    height: window.innerHeight * 0.75,
+    width: svgWidth * 0.8,
+    height: svgHeight * 0.75,
     position: {my: "center", at: "center", of: "svg"},
     close: removeEditor
   });
@@ -160,7 +160,7 @@ function editNotes(id, name) {
       }
     };
 
-    geneateWithAi(prompt, onApply);
+    generateWithAi(prompt, onApply);
   }
 
   function downloadLegends() {

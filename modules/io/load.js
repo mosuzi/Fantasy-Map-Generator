@@ -13,7 +13,7 @@ async function quickLoad() {
 async function loadFromDropbox() {
   const mapPath = byId("loadFromDropboxSelect")?.value;
 
-  DEBUG && console.info("Loading map from Dropbox:", mapPath);
+  console.info("Loading map from Dropbox:", mapPath);
   const blob = await Cloud.providers.dropbox.load(mapPath);
   uploadMap(blob);
 }
@@ -96,6 +96,7 @@ function showUploadErrorMessage(error, URL, random) {
     title: "Loading error",
     width: "32em",
     buttons: {
+      "Clear cache": () => cleanupData(),
       OK: function () {
         $(this).dialog("close");
       }
@@ -114,7 +115,7 @@ function uploadMap(file, callback) {
     const result = fileLoadedEvent.target.result;
     const {mapData, mapVersion} = await parseLoadedResult(result);
 
-    const isInvalid = !mapData || !isValidVersion(mapVersion) || mapData.length < 26 || !mapData[5];
+    const isInvalid = !mapData || !isValidVersion(mapVersion) || mapData.length < 10 || !mapData[5];
     if (isInvalid) return showUploadMessage("invalid", mapData, mapVersion);
 
     const isUpdated = compareVersions(mapVersion, VERSION).isEqual;
@@ -152,11 +153,21 @@ async function uncompress(compressedData) {
 async function parseLoadedResult(result) {
   try {
     const resultAsString = new TextDecoder().decode(result);
+
     // data can be in FMG internal format or base64 encoded
     const isDelimited = resultAsString.substring(0, 10).includes("|");
-    const decoded = isDelimited ? resultAsString : decodeURIComponent(atob(resultAsString));
+    let content = isDelimited ? resultAsString : decodeURIComponent(atob(resultAsString));
 
-    const mapData = decoded.split("\r\n"); // split by CRLF
+    // fix if svg part has CRLF line endings instead of LF
+    const svgMatch = content.match(/<svg[^>]*id="map"[\s\S]*?<\/svg>/);
+    const svgContent = svgMatch[0];
+    const hasCrlfEndings = svgContent.includes("\r\n");
+    if (hasCrlfEndings) {
+      const correctedSvgContent = svgContent.replace(/\r\n/g, "\n");
+      content = content.replace(svgContent, correctedSvgContent);
+    }
+
+    const mapData = content.split("\r\n"); // split by CRLF
     const mapVersion = parseMapVersion(mapData[0].split("|")[0] || mapData[0] || "");
 
     return {mapData, mapVersion};
@@ -195,6 +206,7 @@ function showUploadMessage(type, mapData, mapVersion) {
   $("#alert").dialog({
     title,
     buttons: {
+      "Clear cache": () => cleanupData(),
       OK: function () {
         $(this).dialog("close");
       }
@@ -245,6 +257,7 @@ async function parseLoadedData(data, mapVersion) {
       if (settings[23]) rescaleLabels.checked = +settings[23];
       if (settings[24]) urbanDensity = urbanDensityInput.value = +settings[24];
       if (settings[25]) longitudeInput.value = longitudeOutput.value = minmax(settings[25] || 50, 0, 100);
+      if (settings[26]) growthRate.value = settings[26];
     }
 
     {
@@ -368,7 +381,7 @@ async function parseLoadedData(data, mapVersion) {
 
     {
       reGraph();
-      reMarkFeatures();
+      Features.markupPack();
       pack.features = JSON.parse(data[12]);
       pack.cultures = JSON.parse(data[13]);
       pack.states = JSON.parse(data[14]);
@@ -419,7 +432,7 @@ async function parseLoadedData(data, mapVersion) {
 
       // turn on active layers
       if (hasChild(texture, "image")) turnOn("toggleTexture");
-      if (hasChildren(terrs)) turnOn("toggleHeight");
+      if (hasChildren(terrs.select("#landHeights"))) turnOn("toggleHeight");
       if (hasChildren(biomes)) turnOn("toggleBiomes");
       if (hasChildren(cells)) turnOn("toggleCells");
       if (hasChildren(gridOverlay)) turnOn("toggleGrid");
@@ -434,13 +447,13 @@ async function parseLoadedData(data, mapVersion) {
       if (hasChildren(zones) && isVisible(zones)) turnOn("toggleZones");
       if (isVisible(borders) && hasChild(borders, "path")) turnOn("toggleBorders");
       if (isVisible(routes) && hasChild(routes, "path")) turnOn("toggleRoutes");
-      if (hasChildren(temperature)) turnOn("toggleTemp");
+      if (hasChildren(temperature)) turnOn("toggleTemperature");
       if (hasChild(population, "line")) turnOn("togglePopulation");
       if (hasChildren(ice)) turnOn("toggleIce");
-      if (hasChild(prec, "circle")) turnOn("togglePrec");
+      if (hasChild(prec, "circle")) turnOn("togglePrecipitation");
       if (isVisible(emblems) && hasChild(emblems, "use")) turnOn("toggleEmblems");
       if (isVisible(labels)) turnOn("toggleLabels");
-      if (isVisible(icons)) turnOn("toggleIcons");
+      if (isVisible(icons)) turnOn("toggleBurgIcons");
       if (hasChildren(armies) && isVisible(armies)) turnOn("toggleMilitary");
       if (hasChildren(markers)) turnOn("toggleMarkers");
       if (isVisible(ruler)) turnOn("toggleRulers");
@@ -459,7 +472,7 @@ async function parseLoadedData(data, mapVersion) {
 
     {
       // dynamically import and run auto-update script
-      const {resolveVersionConflicts} = await import("../dynamic/auto-update.js?v=1.100.00");
+      const {resolveVersionConflicts} = await import("../dynamic/auto-update.js?v=1.108.0");
       resolveVersionConflicts(mapVersion);
     }
 
@@ -477,19 +490,23 @@ async function parseLoadedData(data, mapVersion) {
       if (textureHref) updateTextureSelectValue(textureHref);
     }
 
+    // data integrity checks
     {
-      const cells = pack.cells;
+      const {cells, vertices} = pack;
 
-      if (pack.cells.i.length !== pack.cells.state.length) {
-        const message = "Data integrity check. Striping issue detected. To fix edit the heightmap in ERASE mode";
-        ERROR && console.error(message);
+      const cellsMismatch = cells.i.length !== cells.state.length;
+      const featureVerticesMismatch = pack.features.some(f => f?.vertices?.some(vertex => !vertices.p[vertex]));
+
+      if (cellsMismatch || featureVerticesMismatch) {
+        const message = "[Data integrity] Striping issue detected. To fix try to edit the heightmap in ERASE mode";
+        throw new Error(message);
       }
 
       const invalidStates = [...new Set(cells.state)].filter(s => !pack.states[s] || pack.states[s].removed);
       invalidStates.forEach(s => {
         const invalidCells = cells.i.filter(i => cells.state[i] === s);
         invalidCells.forEach(i => (cells.state[i] = 0));
-        ERROR && console.error("Data integrity check. Invalid state", s, "is assigned to cells", invalidCells);
+        ERROR && console.error("[Data integrity] Invalid state", s, "is assigned to cells", invalidCells);
       });
 
       const invalidProvinces = [...new Set(cells.province)].filter(
@@ -498,14 +515,14 @@ async function parseLoadedData(data, mapVersion) {
       invalidProvinces.forEach(p => {
         const invalidCells = cells.i.filter(i => cells.province[i] === p);
         invalidCells.forEach(i => (cells.province[i] = 0));
-        ERROR && console.error("Data integrity check. Invalid province", p, "is assigned to cells", invalidCells);
+        ERROR && console.error("[Data integrity] Invalid province", p, "is assigned to cells", invalidCells);
       });
 
       const invalidCultures = [...new Set(cells.culture)].filter(c => !pack.cultures[c] || pack.cultures[c].removed);
       invalidCultures.forEach(c => {
         const invalidCells = cells.i.filter(i => cells.culture[i] === c);
         invalidCells.forEach(i => (cells.province[i] = 0));
-        ERROR && console.error("Data integrity check. Invalid culture", c, "is assigned to cells", invalidCells);
+        ERROR && console.error("[Data integrity] Invalid culture", c, "is assigned to cells", invalidCells);
       });
 
       const invalidReligions = [...new Set(cells.religion)].filter(
@@ -514,14 +531,14 @@ async function parseLoadedData(data, mapVersion) {
       invalidReligions.forEach(r => {
         const invalidCells = cells.i.filter(i => cells.religion[i] === r);
         invalidCells.forEach(i => (cells.religion[i] = 0));
-        ERROR && console.error("Data integrity check. Invalid religion", r, "is assigned to cells", invalidCells);
+        ERROR && console.error("[Data integrity] Invalid religion", r, "is assigned to cells", invalidCells);
       });
 
       const invalidFeatures = [...new Set(cells.f)].filter(f => f && !pack.features[f]);
       invalidFeatures.forEach(f => {
         const invalidCells = cells.i.filter(i => cells.f[i] === f);
         // No fix as for now
-        ERROR && console.error("Data integrity check. Invalid feature", f, "is assigned to cells", invalidCells);
+        ERROR && console.error("[Data integrity] Invalid feature", f, "is assigned to cells", invalidCells);
       });
 
       const invalidBurgs = [...new Set(cells.burg)].filter(
@@ -530,7 +547,7 @@ async function parseLoadedData(data, mapVersion) {
       invalidBurgs.forEach(burgId => {
         const invalidCells = cells.i.filter(i => cells.burg[i] === burgId);
         invalidCells.forEach(i => (cells.burg[i] = 0));
-        ERROR && console.error("Data integrity check. Invalid burg", burgId, "is assigned to cells", invalidCells);
+        ERROR && console.error("[Data integrity] Invalid burg", burgId, "is assigned to cells", invalidCells);
       });
 
       const invalidRivers = [...new Set(cells.r)].filter(r => r && !pack.rivers.find(river => river.i === r));
@@ -538,21 +555,20 @@ async function parseLoadedData(data, mapVersion) {
         const invalidCells = cells.i.filter(i => cells.r[i] === r);
         invalidCells.forEach(i => (cells.r[i] = 0));
         rivers.select("river" + r).remove();
-        ERROR && console.error("Data integrity check. Invalid river", r, "is assigned to cells", invalidCells);
+        ERROR && console.error("[Data integrity] Invalid river", r, "is assigned to cells", invalidCells);
       });
 
       pack.burgs.forEach(burg => {
         if (typeof burg.capital === "boolean") burg.capital = Number(burg.capital);
 
         if (!burg.i && burg.lock) {
-          ERROR && console.error(`Data integrity check. Burg 0 is marked as locked, removing the status`);
+          ERROR && console.error(`[Data integrity] Burg 0 is marked as locked, removing the status`);
           delete burg.lock;
           return;
         }
 
         if (burg.removed && burg.lock) {
-          ERROR &&
-            console.error(`Data integrity check. Removed burg ${burg.i} is marked as locked. Unlocking the burg`);
+          ERROR && console.error(`[Data integrity] Removed burg ${burg.i} is marked as locked. Unlocking the burg`);
           delete burg.lock;
           return;
         }
@@ -561,36 +577,34 @@ async function parseLoadedData(data, mapVersion) {
 
         if (burg.cell === undefined || burg.x === undefined || burg.y === undefined) {
           ERROR &&
-            console.error(
-              `Data integrity check. Burg ${burg.i} is missing cell info or coordinates. Removing the burg`
-            );
+            console.error(`[Data integrity] Burg ${burg.i} is missing cell info or coordinates. Removing the burg`);
           burg.removed = true;
         }
 
         if (burg.port < 0) {
-          ERROR && console.error("Data integrity check. Burg", burg.i, "has invalid port value", burg.port);
+          ERROR && console.error("[Data integrity] Burg", burg.i, "has invalid port value", burg.port);
           burg.port = 0;
         }
 
         if (burg.cell >= cells.i.length) {
-          ERROR && console.error("Data integrity check. Burg", burg.i, "is linked to invalid cell", burg.cell);
+          ERROR && console.error("[Data integrity] Burg", burg.i, "is linked to invalid cell", burg.cell);
           burg.cell = findCell(burg.x, burg.y);
           cells.i.filter(i => cells.burg[i] === burg.i).forEach(i => (cells.burg[i] = 0));
           cells.burg[burg.cell] = burg.i;
         }
 
         if (burg.state && !pack.states[burg.state]) {
-          ERROR && console.error("Data integrity check. Burg", burg.i, "is linked to invalid state", burg.state);
+          ERROR && console.error("[Data integrity] Burg", burg.i, "is linked to invalid state", burg.state);
           burg.state = 0;
         }
 
         if (burg.state && pack.states[burg.state].removed) {
-          ERROR && console.error("Data integrity check. Burg", burg.i, "is linked to removed state", burg.state);
+          ERROR && console.error("[Data integrity] Burg", burg.i, "is linked to removed state", burg.state);
           burg.state = 0;
         }
 
         if (burg.state === undefined) {
-          ERROR && console.error("Data integrity check. Burg", burg.i, "has no state data");
+          ERROR && console.error("[Data integrity] Burg", burg.i, "has no state data");
           burg.state = 0;
         }
       });
@@ -604,7 +618,7 @@ async function parseLoadedData(data, mapVersion) {
         if (!state.i && capitalBurgs.length) {
           ERROR &&
             console.error(
-              `Data integrity check. Neutral burgs (${capitalBurgs
+              `[Data integrity] Neutral burgs (${capitalBurgs
                 .map(b => b.i)
                 .join(", ")}) marked as capitals. Moving them to towns`
             );
@@ -618,7 +632,7 @@ async function parseLoadedData(data, mapVersion) {
         }
 
         if (capitalBurgs.length > 1) {
-          const message = `Data integrity check. State ${state.i} has multiple capitals (${capitalBurgs
+          const message = `[Data integrity] State ${state.i} has multiple capitals (${capitalBurgs
             .map(b => b.i)
             .join(", ")}) assigned. Keeping the first as capital and moving others to towns`;
           ERROR && console.error(message);
@@ -634,7 +648,7 @@ async function parseLoadedData(data, mapVersion) {
 
         if (state.i && stateBurgs.length && !capitalBurgs.length) {
           ERROR &&
-            console.error(`Data integrity check. State ${state.i} has no capital. Assigning the first burg as capital`);
+            console.error(`[Data integrity] State ${state.i} has no capital. Assigning the first burg as capital`);
           stateBurgs[0].capital = 1;
           moveBurgToGroup(stateBurgs[0].i, "cities");
         }
@@ -643,20 +657,40 @@ async function parseLoadedData(data, mapVersion) {
       pack.provinces.forEach(p => {
         if (!p.i || p.removed) return;
         if (pack.states[p.state] && !pack.states[p.state].removed) return;
-        ERROR && console.error("Data integrity check. Province", p.i, "is linked to removed state", p.state);
-        p.removed = true; // remove incorrect province
+        ERROR &&
+          console.error(
+            `[Data integrity] Province ${p.i} is linked to removed state ${p.state}. Removing the province`
+          );
+        p.removed = true;
       });
 
-      pack.routes.forEach(({i, points}) => {
-        if (!points || points.length < 2) {
-          ERROR &&
-            console.error(
-              "Data integrity check. Route",
-              i,
-              "has less than 2 points. Route will be ignored on layer rendering"
-            );
+      pack.routes.forEach(route => {
+        if (!route.points || route.points.length < 2) {
+          ERROR && console.error(`[Data integrity] Route ${route.i} has less than 2 points. Removing the route`);
+          Routes.remove(route);
         }
       });
+
+      for (const from in pack.cells.routes) {
+        const value = pack.cells.routes[from];
+        if (!value) continue;
+
+        if (Object.keys(value).length === 0) {
+          // remove empty object
+          delete pack.cells.routes[from];
+          continue;
+        }
+
+        for (const to in value) {
+          const routeId = value[to];
+          const route = pack.routes.find(r => r.i === routeId);
+          if (!route) {
+            ERROR &&
+              console.error(`[Data integrity] Route ${routeId} from ${from} to ${to} is missing. Removing the route`);
+            delete pack.cells.routes[from][to];
+          }
+        }
+      }
 
       {
         const markerIds = [];
@@ -664,7 +698,7 @@ async function parseLoadedData(data, mapVersion) {
 
         pack.markers.forEach(marker => {
           if (markerIds[marker.i]) {
-            ERROR && console.error("Data integrity check. Marker", marker.i, "has non-unique id. Changing to", nextId);
+            ERROR && console.error("[Data integrity] Marker", marker.i, "has non-unique id. Changing to", nextId);
 
             const domElements = document.querySelectorAll("#marker" + marker.i);
             if (domElements[1]) domElements[1].id = "marker" + nextId; // rename 2nd dom element
@@ -716,8 +750,9 @@ async function parseLoadedData(data, mapVersion) {
     $("#alert").dialog({
       resizable: false,
       title: "Loading error",
-      maxWidth: "50em",
+      maxWidth: "40em",
       buttons: {
+        "Clear cache": () => cleanupData(),
         "Select file": function () {
           $(this).dialog("close");
           mapToLoad.click();

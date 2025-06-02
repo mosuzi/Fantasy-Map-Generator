@@ -3,7 +3,7 @@
 // module to control the Tools options (click to edit, to re-geenerate, tp add)
 
 toolsContent.addEventListener("click", function (event) {
-  if (customization) return tip("Please exit the customization mode first", false, "warning");
+  if (customization) return tip("Please exit the customization mode first", false, "error");
   if (!["BUTTON", "I"].includes(event.target.tagName)) return;
   const button = event.target.id;
 
@@ -70,14 +70,16 @@ toolsContent.addEventListener("click", function (event) {
   else if (button === "addRoute") createRoute();
   else if (button === "addMarker") toggleAddMarker();
   // click to create a new map buttons
-  else if (button === "openSubmapMenu") UISubmap.openSubmapMenu();
-  else if (button === "openResampleMenu") UISubmap.openResampleMenu();
+  else if (button === "openSubmapTool") openSubmapTool();
+  else if (button === "openTransformTool") openTransformTool();
 });
 
 function processFeatureRegeneration(event, button) {
-  if (button === "regenerateStateLabels") drawStateLabels();
-  else if (button === "regenerateReliefIcons") {
-    ReliefIcons.draw();
+  if (button === "regenerateStateLabels") {
+    $("#labels").fadeIn();
+    drawStateLabels();
+  } else if (button === "regenerateReliefIcons") {
+    drawReliefIcons();
     if (!layerIsOn("toggleRelief")) toggleRelief();
   } else if (button === "regenerateRoutes") {
     regenerateRoutes();
@@ -126,14 +128,14 @@ function regenerateRoutes() {
 
 function regenerateRivers() {
   Rivers.generate();
-  Lakes.defineGroup();
   Rivers.specify();
-  if (!layerIsOn("toggleRivers")) toggleRivers();
-  else drawRivers();
+  Features.specify();
+  if (layerIsOn("toggleRivers")) drawRivers();
 }
 
 function recalculatePopulation() {
   rankCells();
+
   pack.burgs.forEach(b => {
     if (!b.i || b.removed || b.lock) return;
     const i = b.cell;
@@ -143,6 +145,8 @@ function recalculatePopulation() {
     if (b.port) b.population = b.population * 1.3; // increase port population
     b.population = rn(b.population * gauss(2, 3, 0.6, 20, 3), 3);
   });
+
+  layerIsOn("togglePopulation") ? drawPopulation() : togglePopulation();
 }
 
 function regenerateStates() {
@@ -152,12 +156,14 @@ function regenerateStates() {
   pack.states = newStates;
   BurgsAndStates.expandStates();
   BurgsAndStates.normalizeStates();
+  BurgsAndStates.getPoles();
   BurgsAndStates.collectStatistics();
   BurgsAndStates.assignColors();
   BurgsAndStates.generateCampaigns();
   BurgsAndStates.generateDiplomacy();
   BurgsAndStates.defineStateForms();
-  BurgsAndStates.generateProvinces(true);
+  Provinces.generate(true);
+  Provinces.getPoles();
 
   layerIsOn("toggleStates") ? drawStates() : toggleStates();
   layerIsOn("toggleBorders") ? drawBorders() : toggleBorders();
@@ -332,9 +338,11 @@ function recreateStates() {
 function regenerateProvinces() {
   unfog();
 
-  BurgsAndStates.generateProvinces(true, true);
-  drawBorders();
-  if (layerIsOn("toggleProvinces")) drawProvinces();
+  Provinces.generate(true, true);
+  Provinces.getPoles();
+
+  if (layerIsOn("toggleBorders")) drawBorders();
+  layerIsOn("toggleProvinces") ? drawProvinces() : toggleProvinces();
 
   // remove emblems
   document.querySelectorAll("[id^=provinceCOA]").forEach(el => el.remove());
@@ -437,8 +445,10 @@ function regenerateBurgs() {
 
   BurgsAndStates.specifyBurgs();
   BurgsAndStates.defineBurgFeatures();
-  BurgsAndStates.drawBurgs();
   regenerateRoutes();
+
+  drawBurgIcons();
+  drawBurgLabels();
 
   // remove emblems
   document.querySelectorAll("[id^=burgCOA]").forEach(el => el.remove());
@@ -498,13 +508,13 @@ function regenerateEmblems() {
     province.coa.shield = COA.getShield(culture, province.state);
   });
 
-  if (layerIsOn("toggleEmblems")) drawEmblems(); // redrawEmblems
+  layerIsOn("toggleEmblems") ? drawEmblems() : toggleEmblems();
 }
 
 function regenerateReligions() {
   Religions.generate();
-  if (!layerIsOn("toggleReligions")) toggleReligions();
-  else drawReligions();
+
+  layerIsOn("toggleReligions") ? drawReligions() : toggleReligions();
   refreshAllEditors();
 }
 
@@ -513,14 +523,16 @@ function regenerateCultures() {
   Cultures.expand();
   BurgsAndStates.updateCultures();
   Religions.updateCultures();
-  if (!layerIsOn("toggleCultures")) toggleCultures();
-  else drawCultures();
+
+  layerIsOn("toggleCultures") ? drawCultures() : toggleCultures();
   refreshAllEditors();
 }
 
 function regenerateMilitary() {
   Military.generate();
-  if (!layerIsOn("toggleMilitary")) toggleMilitary();
+  if (layerIsOn("toggleMilitary")) drawMilitary();
+  else toggleMilitary();
+
   if (byId("militaryOverviewRefresh").offsetParent) militaryOverviewRefresh.click();
 }
 
@@ -606,8 +618,10 @@ function addLabelOnClick() {
   group.classed("hidden", false);
   group
     .append("text")
+    .attr("text-rendering", "optimizeSpeed")
     .attr("id", id)
     .append("textPath")
+    .attr("text-rendering", "optimizeSpeed")
     .attr("xlink:href", "#textPath_" + id)
     .attr("startOffset", "50%")
     .attr("font-size", "100%")
@@ -656,28 +670,15 @@ function addRiverOnClick() {
   if (cells.h[i] < 20) return tip("Cannot create river in water cell", false, "error");
   if (cells.b[i]) return;
 
-  const {
-    alterHeights,
-    resolveDepressions,
-    addMeandering,
-    getRiverPath,
-    getBasin,
-    getName,
-    getType,
-    getWidth,
-    getOffset,
-    getApproximateLength,
-    getNextId
-  } = Rivers;
   const riverCells = [];
-  let riverId = getNextId(rivers);
+  let riverId = Rivers.getNextId(rivers);
   let parent = riverId;
 
   const initialFlux = grid.cells.prec[cells.g[i]];
   cells.fl[i] = initialFlux;
 
-  const h = alterHeights();
-  resolveDepressions(h);
+  const h = Rivers.alterHeights();
+  Rivers.resolveDepressions(h);
 
   while (i) {
     cells.r[i] = riverId;
@@ -751,11 +752,19 @@ function addRiverOnClick() {
   const defaultWidthFactor = rn(1 / (pointsInput.dataset.cells / 10000) ** 0.25, 2);
   const widthFactor =
     river?.widthFactor || (!parent || parent === riverId ? defaultWidthFactor * 1.2 : defaultWidthFactor);
-  const meanderedPoints = addMeandering(riverCells);
+  const sourceWidth = river?.sourceWidth || Rivers.getSourceWidth(cells.fl[source]);
+  const meanderedPoints = Rivers.addMeandering(riverCells);
 
   const discharge = cells.fl[mouth]; // m3 in second
-  const length = getApproximateLength(meanderedPoints);
-  const width = getWidth(getOffset(discharge, meanderedPoints.length, widthFactor));
+  const length = Rivers.getApproximateLength(meanderedPoints);
+  const width = Rivers.getWidth(
+    Rivers.getOffset({
+      flux: discharge,
+      pointIndex: meanderedPoints.length,
+      widthFactor,
+      startingWidth: sourceWidth
+    })
+  );
 
   if (river) {
     river.source = source;
@@ -764,9 +773,9 @@ function addRiverOnClick() {
     river.width = width;
     river.cells = riverCells;
   } else {
-    const basin = getBasin(parent);
-    const name = getName(mouth);
-    const type = getType({i: riverId, length, parent});
+    const basin = Rivers.getBasin(parent);
+    const name = Rivers.getName(mouth);
+    const type = Rivers.getType({i: riverId, length, parent});
 
     rivers.push({
       i: riverId,
@@ -776,7 +785,7 @@ function addRiverOnClick() {
       length,
       width,
       widthFactor,
-      sourceWidth: 0,
+      sourceWidth,
       parent,
       cells: riverCells,
       basin,
@@ -786,8 +795,7 @@ function addRiverOnClick() {
   }
 
   // render river
-  lineGen.curve(d3.curveCatmullRom.alpha(0.1));
-  const path = getRiverPath(meanderedPoints, widthFactor);
+  const path = Rivers.getRiverPath(meanderedPoints, widthFactor, sourceWidth);
   const id = "river" + riverId;
   const riversG = viewbox.select("#rivers");
   riversG.append("path").attr("id", id).attr("d", path);
@@ -854,33 +862,47 @@ function configMarkersGeneration() {
   drawConfigTable();
 
   function drawConfigTable() {
-    const {markers} = pack;
     const config = Markers.getConfig();
-    const headers = `<thead style='font-weight:bold'><tr>
+
+    const headers = /* html */ `<thead style='font-weight:bold'><tr>
       <td data-tip="Marker type name">Type</td>
       <td data-tip="Marker icon">Icon</td>
       <td data-tip="Marker number multiplier">Multiplier</td>
       <td data-tip="Number of markers of that type on the current map">Number</td>
     </tr></thead>`;
-    const lines = config.map(({type, icon, multiplier}, index) => {
-      const inputId = `markerIconInput${index}`;
-      return `<tr>
-        <td><input value="${type}" /></td>
+
+    const lines = config.map(({type, icon, multiplier}) => {
+      const isExternal = icon.startsWith("http") || icon.startsWith("data:image");
+
+      return /* html */ `<tr>
+        <td><input class="type" value="${type}" /></td>
         <td style="position: relative">
-          <input id="${inputId}" style="width: 5em" value="${icon}" />
-          <i class="icon-edit pointer" style="position: absolute; margin:.4em 0 0 -1.4em; font-size:.85em"></i>
+          <img class="image" src="${isExternal ? icon : ""}" ${
+        isExternal ? "" : "hidden"
+      } style="width:1.2em; height:1.2em; vertical-align: middle;">
+          <span class="emoji" style="font-size:1.2em">${isExternal ? "" : icon}</span>
+          <button class="changeIcon icon-pencil"></button>
         </td>
-        <td><input type="number" min="0" max="100" step="0.1" value="${multiplier}" /></td>
-        <td style="text-align:center">${markers.filter(marker => marker.type === type).length}</td>
+        <td><input class="multiplier" type="number" min="0" max="100" step="0.1" value="${multiplier}" /></td>
+        <td style="text-align:center">${pack.markers.filter(marker => marker.type === type).length}</td>
       </tr>`;
     });
+
     const table = `<table class="table">${headers}<tbody>${lines.join("")}</tbody></table>`;
     alertMessage.innerHTML = table;
 
-    alertMessage.querySelectorAll("i").forEach(selectIconButton => {
+    alertMessage.querySelectorAll("button.changeIcon").forEach(selectIconButton => {
       selectIconButton.addEventListener("click", function () {
-        const input = this.previousElementSibling;
-        selectIcon(input.value, icon => (input.value = icon));
+        const image = this.parentElement.querySelector(".image");
+        const emoji = this.parentElement.querySelector(".emoji");
+        const icon = image.getAttribute("src") || emoji.textContent;
+
+        selectIcon(icon, value => {
+          const isExternal = value.startsWith("http") || value.startsWith("data:image");
+          image.setAttribute("src", isExternal ? value : "");
+          image.hidden = !isExternal;
+          emoji.textContent = isExternal ? "" : value;
+        });
       });
     });
   }
@@ -888,12 +910,14 @@ function configMarkersGeneration() {
   const applyChanges = () => {
     const rows = alertMessage.querySelectorAll("tbody > tr");
     const rowsData = Array.from(rows).map(row => {
-      const inputs = row.querySelectorAll("input");
-      return {
-        type: inputs[0].value,
-        icon: inputs[1].value,
-        multiplier: parseFloat(inputs[2].value)
-      };
+      const type = row.querySelector(".type").value;
+
+      const image = row.querySelector(".image");
+      const emoji = row.querySelector(".emoji");
+      const icon = image.getAttribute("src") || emoji.textContent;
+
+      const multiplier = parseFloat(row.querySelector(".multiplier").value);
+      return {type, icon, multiplier};
     });
 
     const config = Markers.getConfig();

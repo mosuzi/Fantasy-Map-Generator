@@ -70,6 +70,10 @@ function getColorScheme(scheme = "bright") {
   return heightmapColorSchemes[scheme];
 }
 
+function getColor(value, scheme = getColorScheme("bright")) {
+  return scheme(1 - (value < 20 ? value - 5 : value) / 100);
+}
+
 // Toggle style sections on element select
 styleElementSelect.on("change", selectStyleElement);
 
@@ -112,19 +116,20 @@ function selectStyleElement() {
   if (
     [
       "armies",
-      "routes",
-      "lakes",
+      "biomes",
       "borders",
-      "cults",
-      "relig",
       "cells",
       "coastline",
-      "prec",
+      "coordinates",
+      "cults",
+      "gridOverlay",
       "ice",
       "icons",
-      "coordinates",
-      "zones",
-      "gridOverlay"
+      "lakes",
+      "prec",
+      "relig",
+      "routes",
+      "zones"
     ].includes(styleElement)
   ) {
     styleStroke.style.display = "block";
@@ -135,9 +140,17 @@ function selectStyleElement() {
 
   // stroke dash
   if (
-    ["routes", "borders", "temperature", "legend", "population", "coordinates", "zones", "gridOverlay"].includes(
-      styleElement
-    )
+    [
+      "borders",
+      "cells",
+      "coordinates",
+      "gridOverlay",
+      "legend",
+      "population",
+      "routes",
+      "temperature",
+      "zones"
+    ].includes(styleElement)
   ) {
     styleStrokeDash.style.display = "block";
     styleStrokeDasharrayInput.value = el.attr("stroke-dasharray") || "";
@@ -706,19 +719,19 @@ styleHeightmapCurve.on("change", e => {
 
 styleReliefSet.on("change", e => {
   terrain.attr("set", e.target.value);
-  ReliefIcons.draw();
+  drawReliefIcons();
   if (!layerIsOn("toggleRelief")) toggleRelief();
 });
 
 styleReliefSize.on("change", e => {
   terrain.attr("size", e.target.value);
-  ReliefIcons.draw();
+  drawReliefIcons();
   if (!layerIsOn("toggleRelief")) toggleRelief();
 });
 
 styleReliefDensity.on("change", e => {
   terrain.attr("density", e.target.value);
-  ReliefIcons.draw();
+  drawReliefIcons();
   if (!layerIsOn("toggleRelief")) toggleRelief();
 });
 
@@ -952,7 +965,7 @@ styleArmiesSize.on("input", e => {
   armies.selectAll("g").remove(); // clear armies layer
   pack.states.forEach(s => {
     if (!s.i || s.removed || !s.military.length) return;
-    Military.drawRegiments(s.military, s.i);
+    drawRegiments(s.military, s.i);
   });
 });
 

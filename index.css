@@ -122,10 +122,6 @@ a {
   fill: none;
 }
 
-#biomes {
-  stroke-width: 0.7;
-}
-
 #landmass {
   mask: url(#land);
   fill-rule: evenodd;
@@ -170,6 +166,7 @@ t,
 #texture,
 #landmass,
 #vignette,
+#gridOverlay,
 #fogging {
   pointer-events: none;
 }
@@ -190,18 +187,10 @@ t,
   font-size: 0.8em;
 }
 
-#statesBody {
-  stroke-width: 3;
-}
-
 #statesHalo {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-#provincesBody {
-  stroke-width: 0.2;
 }
 
 #statesBody,
@@ -685,6 +674,7 @@ input[type="color"]::-webkit-color-swatch-wrapper {
   border: none;
   padding: 0.45em 0.75em;
   margin: 0.4em 0;
+  white-space: nowrap;
   font-family: var(--monospace);
   animation: glowing 2s infinite;
 }
@@ -733,7 +723,7 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 
 #toolsContent > .grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   margin: 0.2em 0;
 }
 
@@ -780,7 +770,7 @@ fieldset {
   text-overflow: ellipsis;
 }
 
-.tabcontent .buttonoff {
+.tabcontent li.buttonoff {
   background-color: var(--bg-disabled);
   color: #444444aa;
 }
@@ -1520,20 +1510,6 @@ div.states > .burgName,
 div.states > .burgState,
 div.states > .burgCulture {
   width: 6em;
-}
-
-div.states .burgPopulation {
-  width: 4.8em;
-}
-
-div.states .burgType {
-  width: 3em;
-}
-
-div.states .burgType > span {
-  padding: 0 1px;
-  color: #6e5e66;
-  transition: 0.2s;
 }
 
 div.states span.inactive {
@@ -2397,6 +2373,25 @@ svg.button {
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+
+#chat-widget-container {
+  user-select: none;
+}
+
+#chat-widget-minimized {
+  animation: fadeIn 1s ease-in;
+  transform: scale(0.65);
+  opacity: var(--bg-opacity);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: var(--bg-opacity);
   }
 }
 

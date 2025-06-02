@@ -15,7 +15,7 @@ function editWorld() {
       pane.insertAdjacentHTML("afterbegin", checkbox);
 
       const button = this.parentElement.querySelector(".ui-dialog-buttonset > button");
-      button.on("mousemove", () => tip("Apply curreny settings to the map"));
+      button.on("mousemove", () => tip("Apply current settings to the map"));
     },
     close: function () {
       $(this).dialog("destroy");
@@ -86,13 +86,13 @@ function editWorld() {
     generatePrecipitation();
     const heights = new Uint8Array(pack.cells.h);
     Rivers.generate();
-    Lakes.defineGroup();
     Rivers.specify();
     pack.cells.h = new Float32Array(heights);
     Biomes.define();
+    Features.specify();
 
-    if (layerIsOn("toggleTemp")) drawTemp();
-    if (layerIsOn("togglePrec")) drawPrec();
+    if (layerIsOn("toggleTemperature")) drawTemperature();
+    if (layerIsOn("togglePrecipitation")) drawPrecipitation();
     if (layerIsOn("toggleBiomes")) drawBiomes();
     if (layerIsOn("toggleCoordinates")) drawCoordinates();
     if (layerIsOn("toggleRivers")) drawRivers();

@@ -543,6 +543,7 @@ function changePopulation(stateId) {
       burgs.forEach(b => (b.population = population));
     }
 
+    if (layerIsOn("togglePopulation")) drawPopulation();
     refreshStatesEditor();
   }
 }
@@ -642,11 +643,11 @@ function stateRemove(stateId) {
   pack.states[stateId] = {i: stateId, removed: true};
 
   debug.selectAll(".highlight").remove();
-  if (!layerIsOn("toggleStates")) toggleStates();
-  else drawStates();
-  if (!layerIsOn("toggleBorders")) toggleBorders();
-  else drawBorders();
+
+  if (layerIsOn("toggleStates")) drawStates();
+  if (layerIsOn("toggleBorders")) drawBorders();
   if (layerIsOn("toggleProvinces")) drawProvinces();
+
   refreshStatesEditor();
 }
 
@@ -742,6 +743,7 @@ function showStatesChart() {
 
   node
     .append("text")
+    .attr("text-rendering", "optimizeSpeed")
     .style("font-size", d => rn((d.r ** 0.97 * 4) / lp(d.data.name), 2) + "px")
     .selectAll("tspan")
     .data(d => d.data.name.split(exp))
@@ -839,13 +841,15 @@ function recalculateStates(must) {
   if (!must && !statesAutoChange.checked) return;
 
   BurgsAndStates.expandStates();
-  BurgsAndStates.generateProvinces();
-  if (!layerIsOn("toggleStates")) toggleStates();
-  else drawStates();
-  if (!layerIsOn("toggleBorders")) toggleBorders();
-  else drawBorders();
+  Provinces.generate();
+  Provinces.getPoles();
+  BurgsAndStates.getPoles();
+
+  if (layerIsOn("toggleStates")) drawStates();
+  if (layerIsOn("toggleBorders")) drawBorders();
   if (layerIsOn("toggleProvinces")) drawProvinces();
   if (adjustLabels.checked) drawStateLabels();
+
   refreshStatesEditor();
 }
 
@@ -981,6 +985,7 @@ function applyStatesManualAssignent() {
 
   if (affectedStates.length) {
     refreshStatesEditor();
+    BurgsAndStates.getPoles();
     layerIsOn("toggleStates") ? drawStates() : toggleStates();
     if (adjustLabels.checked) drawStateLabels([...new Set(affectedStates)]);
     adjustProvinces([...new Set(affectedProvinces)]);
@@ -1196,7 +1201,6 @@ function addState() {
   const basename = center % 5 === 0 ? burgs[burg].name : Names.getCulture(culture);
   const name = Names.getState(basename, culture);
   const color = getRandomColor();
-  const pole = cells.p[center];
 
   // generate emblem
   const cultureType = pack.cultures[culture].type;
@@ -1246,38 +1250,21 @@ function addState() {
     culture,
     military: [],
     alert: 1,
-    coa,
-    pole
+    coa
   });
+
+  BurgsAndStates.getPoles();
   BurgsAndStates.collectStatistics();
   BurgsAndStates.defineStateForms([newState]);
   adjustProvinces([cells.province[center]]);
 
-  if (layerIsOn("toggleProvinces")) toggleProvinces();
-  if (!layerIsOn("toggleStates")) toggleStates();
-  else drawStates();
-  if (!layerIsOn("toggleBorders")) toggleBorders();
-  else drawBorders();
-
-  // add label
-  defs
-    .select("#textPaths")
-    .append("path")
-    .attr("d", `M${pole[0] - 50},${pole[1] + 6}h${100}`)
-    .attr("id", "textPath_stateLabel" + newState);
-  labels
-    .select("#states")
-    .append("text")
-    .attr("id", "stateLabel" + newState)
-    .append("textPath")
-    .attr("xlink:href", "#textPath_stateLabel" + newState)
-    .attr("startOffset", "50%")
-    .attr("font-size", "50%")
-    .append("tspan")
-    .attr("x", name.length * -3)
-    .text(name);
-
+  drawStateLabels([newState]);
   COArenderer.add("state", newState, coa, states[newState].pole[0], states[newState].pole[1]);
+
+  layerIsOn("toggleProvinces") && toggleProvinces();
+  layerIsOn("toggleStates") ? drawStates() : toggleStates();
+  layerIsOn("toggleBorders") ? drawBorders() : toggleBorders();
+
   statesEditorAddLines();
 }
 
@@ -1415,6 +1402,7 @@ function openStateMergeDialog() {
     unfog();
     debug.selectAll(".highlight").remove();
 
+    BurgsAndStates.getPoles();
     layerIsOn("toggleStates") ? drawStates() : toggleStates();
     layerIsOn("toggleBorders") ? drawBorders() : toggleBorders();
     layerIsOn("toggleProvinces") && drawProvinces();

@@ -51,9 +51,8 @@ export function resolveVersionConflicts(mapVersion) {
     BurgsAndStates.generateCampaigns();
     BurgsAndStates.generateDiplomacy();
     BurgsAndStates.defineStateForms();
-    drawStates();
-    BurgsAndStates.generateProvinces();
-    drawBorders();
+    Provinces.generate();
+    Provinces.getPoles();
     if (!layerIsOn("toggleBorders")) $("#borders").fadeOut();
     if (!layerIsOn("toggleStates")) regions.attr("display", "none").selectAll("path").remove();
 
@@ -202,7 +201,9 @@ export function resolveVersionConflicts(mapVersion) {
     defs.select("#water").selectAll("path").remove();
     coastline.selectAll("path").remove();
     lakes.selectAll("path").remove();
-    drawCoastline();
+
+    Features.markupPack();
+    createDefaultRuler();
   }
 
   if (isOlderThan("1.11.0")) {
@@ -939,5 +940,58 @@ export function resolveVersionConflicts(mapVersion) {
     });
     zones.style("display", null).selectAll("*").remove();
     if (layerIsOn("toggleZones")) drawZones();
+  }
+
+  if (isOlderThan("1.104.0")) {
+    // v1.104.00 separated pole of inaccessibility detection from layer rendering
+    BurgsAndStates.getPoles();
+    Provinces.getPoles();
+  }
+
+  if (isOlderThan("1.105.0")) {
+    // v1.104.0 introduced some bugs with layers visibility
+    viewbox.select("#icons").style("display", null);
+    viewbox.select("#ice").style("display", null);
+    viewbox.select("#regions").style("display", null);
+    viewbox.select("#armies").style("display", null);
+  }
+
+  if (isOlderThan("1.106.0")) {
+    // v1.104.0 introduced bugs with coastlines. Redraw features
+    defs.select("#featurePaths").remove();
+    defs.append("g").attr("id", "featurePaths");
+    defs.select("#land").selectAll("path, use").remove();
+    defs.select("#water").selectAll("path, use").remove();
+    viewbox.select("#coastline").selectAll("path, use").remove();
+
+    // v1.104.0 introduced bugs with state borders
+    regions
+      .attr("opacity", null)
+      .attr("stroke-width", null)
+      .attr("letter-spacing", null)
+      .attr("fill", null)
+      .attr("stroke", null);
+
+    // pole can be missing for some states/provinces
+    BurgsAndStates.getPoles();
+    Provinces.getPoles();
+  }
+
+  if (isOlderThan("1.107.0")) {
+    // v1.107.0 allowed custom images for markers and regiments
+    if (layerIsOn("toggleMarkers")) drawMarkers();
+    if (layerIsOn("toggleMilitary")) drawMilitary();
+  }
+
+  if (isOlderThan("1.108.0")) {
+    // v1.108.0 changed features rendering method
+    pack.features.forEach(f => {
+      // fix lakes with missing group
+      if (f?.type === "lake" && !f.group) f.group = "freshwater";
+    });
+    drawFeatures();
+
+    // some old maps has incorrect "heights" groups
+    viewbox.selectAll("#heights").remove();
   }
 }
